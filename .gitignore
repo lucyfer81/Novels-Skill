@@ -1,0 +1,8 @@
+# 运行环境（从 skill-src 复制而来）
+.claude/
+
+# 生成的小说项目（运行时输出）
+novels/
+
+# zip 解压的原始文件（可从 files.zip 重新解压）
+skill-raw/
