@@ -33,7 +33,7 @@ description: 交互式长篇小说共创工具。当用户想要写小说、创�
 
 ## 初始化流程
 
-> 详细流程见 `.claude/skills/interactive-novel/references/init_flow.md`，以下是导航摘要。
+> 详细流程见 `skill-src/references/init_flow.md`，以下是导航摘要。
 
 初始化分为**4轮对话**，每轮你提供3个选项，用户选1个。完成后自动生成项目文件。
 
@@ -60,13 +60,13 @@ C. [选项名]
 （也可以告诉我你有完全不同的想法）
 ```
 
-4轮完成后，读取 `.claude/skills/interactive-novel/references/genre_mystery.md` 生成完整项目文件，并运行 `.claude/skills/interactive-novel/scripts/init_project.sh`。
+4轮完成后，读取 `skill-src/references/genre_mystery.md` 生成完整项目文件，并将项目创建在 `novels/` 目录下。
 
 ---
 
 ## 写作循环：核心指令
 
-> 详细行为定义见 `.claude/skills/interactive-novel/references/writing_loop.md`
+> 详细行为定义见 `skill-src/references/writing_loop.md`
 
 | 指令 | 功能 |
 |------|------|
@@ -76,6 +76,7 @@ C. [选项名]
 | `/clue [描述]` | 在当前段落植入一条线索或伏笔，自动记录到clues.md |
 | `/edit [要求]` | 针对最近生成的段落进行修改，用自然语言描述要求 |
 | `/recap [N]` | 生成最近N章的摘要（默认3章） |
+| `/finish` | 所有章节写完后，将drafts合并为完整小说文件 |
 
 ---
 
@@ -106,26 +107,31 @@ C. [选项名]
 2. 更新 meta/characters.md 中出场角色的"当前状态"字段
 3. 更新 meta/clues.md（已投放线索标记为✅）
 4. 询问用户：继续 /write？调整计划 /plan？还是休息一下？
+5. **当所有章节完成后**：将 `drafts/` 下所有章节按顺序合并为一个 md 文件，放在小说项目根目录下，文件名为 `{项目名}.md`。合并时在每个章节之间用 `---` 分隔，并在开头加上书名和章节目录。
 ```
 
 ---
 
 ## 项目文件结构（初始化后生成）
 
+所有小说项目创建在项目根目录的 `novels/` 下：
+
 ```
-{项目名}/
-├── meta/
-│   ├── project_info.md      # 类型、风格关键词、初始化选择记录
-│   ├── style_guide.md       # 风格宪法（由4轮选择生成）
-│   ├── outline.md           # 宽松大纲（章节规划）
-│   ├── characters.md        # 角色档案（含动态状态字段）
-│   ├── truth.md             # 真相文档（凶手/动机/完整案件经过）
-│   ├── clues.md             # 线索地图
-│   └── session_log.md       # 每章摘要日志
-└── drafts/
-    ├── ch01.md
-    ├── ch02.md
-    └── ...
+novels/
+└── {项目名}/
+    ├── meta/
+    │   ├── project_info.md      # 类型、风格关键词、初始化选择记录
+    │   ├── style_guide.md       # 风格宪法（由4轮选择生成）
+    │   ├── outline.md           # 宽松大纲（章节规划）
+    │   ├── characters.md        # 角色档案（含动态状态字段）
+    │   ├── truth.md             # 真相文档（凶手/动机/完整案件经过）
+    │   ├── clues.md             # 线索地图
+    │   └── session_log.md       # 每章摘要日志
+    ├── drafts/
+    │   ├── ch01.md
+    │   ├── ch02.md
+    │   └── ...
+    └── {项目名}.md              # 最终合并的完整小说
 ```
 
 ---
