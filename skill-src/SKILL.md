@@ -33,7 +33,7 @@ description: 交互式长篇小说共创工具。当用户想要写小说、创�
 
 ## 初始化流程
 
-> 详细流程见 `skill-src/references/init_flow.md`，以下是导航摘要。
+> 详细流程见 `references/init_flow.md`，以下是导航摘要。
 
 初始化分为**4轮对话**，每轮你提供3个选项，用户选1个。完成后自动生成项目文件。
 
@@ -60,13 +60,13 @@ C. [选项名]
 （也可以告诉我你有完全不同的想法）
 ```
 
-4轮完成后，读取 `skill-src/references/genre_mystery.md` 生成完整项目文件，并将项目创建在 `novels/` 目录下。
+4轮完成后，读取 `references/genre_mystery.md` 生成完整项目文件，并将项目创建在 `novels/` 目录下。
 
 ---
 
 ## 写作循环：核心指令
 
-> 详细行为定义见 `skill-src/references/writing_loop.md`
+> 详细行为定义见 `references/writing_loop.md`
 
 | 指令 | 功能 |
 |------|------|

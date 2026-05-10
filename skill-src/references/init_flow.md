@@ -174,10 +174,10 @@ C. 救赎与和解
 获取基本信息后，依次生成（读取对应模板）：
 
 1. **`meta/project_info.md`** - 记录项目名称、类型、4轮选择
-2. **`meta/style_guide.md`** - 风格宪法（读取 `skill-src/templates/style_guide_template.md`）
-3. **`meta/truth.md`** - 真相文档（读取 `skill-src/templates/truth_template.md`）
-4. **`meta/clues.md`** - 线索地图（读取 `skill-src/templates/clues_template.md`）
-5. **`meta/characters.md`** - 角色档案（读取 `skill-src/templates/characters_template.md`，至少包含主角、嫌疑人和1-2个关键配角）
+2. **`meta/style_guide.md`** - 风格宪法（读取 `templates/style_guide_template.md`）
+3. **`meta/truth.md`** - 真相文档（读取 `templates/truth_template.md`）
+4. **`meta/clues.md`** - 线索地图（读取 `templates/clues_template.md`）
+5. **`meta/characters.md`** - 角色档案（读取 `templates/characters_template.md`，至少包含主角、嫌疑人和1-2个关键配角）
 6. **`meta/outline.md`** - 宽松大纲（建议章节数和节奏分布）
 7. **`meta/session_log.md`** - 空日志文件，等待第一章完成后填入
 
