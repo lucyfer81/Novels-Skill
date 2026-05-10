@@ -6,3 +6,6 @@ novels/
 
 # zip 解压的原始文件（可从 files.zip 重新解压）
 skill-raw/
+
+# 脚本目录
+scripts/
