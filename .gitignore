@@ -1,5 +1,6 @@
 # 运行环境（从 skill-src 复制而来）
 .claude/
+.gemini/
 
 # 生成的小说项目（运行时输出）
 novels/
