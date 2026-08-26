@@ -1,6 +1,6 @@
 ---
 name: interactive-novel
-description: 交互式长篇小说共创工具。支持推理悬疑、爱情两种题材，支持中文和英文写作。当用户想要写小说、创作故事、生成章节、构建人物，或提到推理/悬疑/爱情/言情创作时触发此Skill。用户说"我想写小说"、"帮我创作一个故事"、"继续我的小说"、"I want to write a novel"时必须使用此Skill。
+description: 交互式与自主长篇小说创作工具。支持推理悬疑、爱情两种题材，支持中英文写作。当用户提到写小说、创作故事、生成章节、构建人物、提到推理/悬疑/言情，或输入 /auto-write、/auto-write new、/auto-chapter、/write、/plan、/status、/review、/finish 等指令时，必须激活此 Skill。用户说"我想写小说"、"帮我创作故事"、"自动写小说"、"I want to write a novel"时必须使用。
 ---
 
 # 交互式长篇小说共创 Skill
@@ -11,25 +11,49 @@ description: 交互式长篇小说共创工具。支持推理悬疑、爱情两�
 
 ---
 
+## 核心协议：目标项目锁定与隔离红线（每次交互必读）
+
+在执行任何写作、查看或自动生成指令前，必须首先确定唯一的**目标项目目录 `{project_dir}`（即 `novels/{项目名}`）**：
+
+1. **显式新项目 (`new`)**：
+   - 用户输入 `/auto-write new`、`/auto-chapter new`、`/write new` 或表达"写新小说" → 判定为全新项目，直接进入**初始化流程**（若为 `/auto-write new`，初始化完成后自动无缝进入自动写作循环）。
+2. **显式指定项目名/路径**：
+   - 用户指令中包含项目名（例如 `/auto-write 倒影的碎片`、`/write novels/雪祭`）→ 直接锁定目标 `{project_dir} = novels/{项目名}`。
+3. **会话上下文锁定**：
+   - 当前会话此前已明确在操作某部小说 → 继续沿用已锁定的 `{project_dir}`。
+4. **未指定且存在多部小说（必须反问确认）**：
+   - 若未指定目标且当前无明确上下文，**仅列出 `novels/` 下的一级目录名称**，向用户询问："检测到多部小说，请问你想操作哪一部？（也可输入 `new` 开始新小说）"。
+   - 🔴 **严禁擅自选择**：绝对不得在未获用户确认的情况下擅自挑选某部小说！
+5. ⚠️ **多 Agent 并发与目录隔离红线**：
+   - 锁定目标项目 `{project_dir}` 后，**所有读写操作严格限定在 `{project_dir}/` 内部**（`{project_dir}/meta/`、`{project_dir}/drafts/`）。
+   - **绝对严禁**扫描、读取或修改 `novels/` 下其他未锁定的兄弟小说目录，防止与正在并发运行的其他 Agent 产生文件与状态冲突！
+
+---
+
 ## 快速判断：用户处于哪个阶段？
 
-收到用户消息后，先判断场景：
+收到用户消息后，先按上述锁定协议确定场景与 `{project_dir}`：
 
 ### 场景A：全新项目
-用户说"我想写一部小说"、"帮我开始创作"等 → 进入**初始化流程**
+用户说"我想写一部小说"、"帮我开始创作"、或输入 `/auto-write new` / `/write new` 等 → 进入**初始化流程**（若来自 `/auto-write new`，初始化生成项目文件后自动开启自动写作循环）。
 
 ### 场景B：继续已有项目
-用户说"继续我的小说"、"写下一章"等 → 先执行以下检查：
+用户说"继续我的小说"、"写下一章"等 → 锁定 `{project_dir}`，执行检查：
 ```
-1. 询问或确认项目目录路径
-2. 读取 meta/project_info.md 了解项目状态
-3. 读取 meta/style_guide.md 加载风格宪法
-4. 读取 meta/characters.md 获取最新角色状态
+1. 确认目标项目目录路径 {project_dir}（如未指定且存在多个则向用户确认）
+2. 读取 {project_dir}/meta/project_info.md 了解项目状态
+3. 读取 {project_dir}/meta/style_guide.md 加载风格宪法
+4. 读取 {project_dir}/meta/characters.md 获取最新角色状态
 5. 根据用户指令进入对应的写作指令
 ```
 
 ### 场景C：具体写作指令
-用户直接输入 `/write`、`/plan`、`/status` 等 → 跳转到**写作循环**章节
+用户输入 `/write [项目名]`、`/plan [项目名]`、`/status [项目名]` 等 → 锁定 `{project_dir}` 后跳转到**写作循环**章节。
+
+### 场景D：自动写作
+用户说"自动写完"、"auto write"等，或使用 `/auto-write [项目名|new]` / `/auto-chapter [项目名|new]` 指令：
+- 若参数为 `new`：进入初始化流程，完成后自动开始全书写作。
+- 若已有项目：锁定 `{project_dir}`，确认 `{project_dir}/meta/` 文件齐全，读取 `references/auto_agents.md` 进入**自动写作流程**。
 
 ---
 
@@ -53,7 +77,7 @@ description: 交互式长篇小说共创工具。支持推理悬疑、爱情两�
 第4轮：结局基调
 4轮完成后，读取 `references/genres/genre_romance.md` 生成完整项目文件。
 
-所有项目均创建在 `novels/` 目录下。
+所有项目均创建在 `novels/{项目名}/` 目录下。
 
 每轮格式固定：
 ```
@@ -73,7 +97,7 @@ C. [选项名]
 （也可以告诉我你有完全不同的想法）
 ```
 
-4轮完成后，读取对应题材的 genre 指南生成完整项目文件，并将项目创建在 `novels/` 目录下。
+4轮完成后，读取对应题材的 genre 指南生成完整项目文件，并将项目创建在 `novels/{项目名}/` 目录下。
 
 ---
 
@@ -83,41 +107,43 @@ C. [选项名]
 
 | 指令 | 功能 |
 |------|------|
-| `/write` | 生成本章下一段（约900字）并立即写入 `drafts/chXX_draft.md`。每章共三段，每段结束后暂停等待用户选择走向。第三段结束后自动执行**章节封存协议**（meta更新 + 责任编辑审阅），草稿文件升格为正式章节文件。 |
-| `/plan` | 不写正文，讨论接下来2-3章的走向，给出3个结构方案 |
-| `/status` | 显示当前人物状态、未解伏笔、线索投放进度、待处理编辑意见 |
-| `/clue [描述]` | 在当前段落植入一条线索或伏笔，自动记录到clues.md |
+| `/write [项目名\|new]` | 生成本章下一段（约900字）并立即写入 `{project_dir}/drafts/chXX_draft.md`。每章共三段，每段结束后暂停等待用户选择走向。第三段结束后自动执行**章节封存协议**（meta更新 + 责任编辑审阅），草稿文件升格为正式章节文件。若带 `new` 则先初始化。 |
+| `/plan [项目名]` | 不写正文，讨论接下来2-3章的走向，给出3个结构方案 |
+| `/status [项目名]` | 显示当前人物状态、未解伏笔、线索投放进度、待处理编辑意见 |
+| `/clue [描述]` | 在当前段落植入一条线索或伏笔，自动记录到 `{project_dir}/meta/clues.md` |
 | `/edit [要求]` | 针对最近生成的段落进行修改，用自然语言描述要求 |
 | `/recap [N]` | 生成最近N章的摘要（默认3章） |
-| `/finish` | 所有章节写完后，将drafts合并为完整小说文件，并自动触发两轮全稿审阅 |
-| `/review` | 手动触发两轮全稿审阅（第一轮：一致性核查；第二轮：文学编辑评审）。可在 `/finish` 后使用，也可在任意阶段单独调用。审阅完成后输出问题清单，并提示用户确认后触发对应段落的 `/edit` |
+| `/finish [项目名]` | 所有章节写完后，将 `{project_dir}/drafts/` 合并为完整小说文件 `{project_dir}/{项目名}.md`，并自动触发两轮全稿审阅 |
+| `/review [项目名]` | 手动触发两轮全稿审阅（第一轮：一致性核查；第二轮：文学编辑评审）。可在 `/finish` 后使用，也可在任意阶段单独调用。审阅完成后输出问题清单，并提示用户确认后触发对应段落的 `/edit` |
+| `/auto-write [项目名\|new]` | 自动完成从当前进度到全书终章。若为 `new` 则先初始化后自动开写。通过子任务机制派发 Writer（写正文）和 Chooser（选走向）。Writer 持有 truth.md / relationship_arc.md，Chooser 不持有——模拟读者视角选择。🔴 编辑问题自动修复，🟡 记录不修。完成后自动执行 `/finish` + `/review`。详见 `references/auto_agents.md` |
+| `/auto-chapter [项目名\|new]` | 与 `/auto-write` 相同的 Writer/Chooser 机制，但只自动完成当前一章（3段）后暂停，等待用户决定是否继续。详见 `references/auto_agents.md` |
 
 ---
 
 ## 上下文注入规则
 
-**每次 `/write` 前，先读取 meta/project_info.md 确认 genre 和 language，再按顺序加载：**
+**每次写作前，先锁定目标项目 `{project_dir}`，读取 `{project_dir}/meta/project_info.md` 确认 genre 和 language，再按顺序加载：**
 
 ```
-1. meta/style_guide.md → 风格宪法（仅加载"绝对禁止"和"样板句式"两节）
+1. {project_dir}/meta/style_guide.md → 风格宪法（仅加载"绝对禁止"和"样板句式"两节）
 
-2. [mystery] meta/truth.md → 真相文档（完整加载，仅你可见，不在正文中泄露）
-   [romance] meta/relationship_arc.md → 关系弧线（完整加载，仅你可见，指导情感节奏）
+2. [mystery] {project_dir}/meta/truth.md → 真相文档（完整加载，仅你可见，不在正文中泄露）
+   [romance] {project_dir}/meta/relationship_arc.md → 关系弧线（完整加载，仅你可见，指导情感节奏）
 
-3. meta/characters.md → 仅加载本章出场角色的条目
+3. {project_dir}/meta/characters.md → 仅加载本章出场角色的条目
 
-4. [mystery] meta/clues.md → 已投放线索 + 待投放线索
-   [romance] meta/romance_clues.md → 已投放情感信号 + 待投放情感信号
+4. [mystery] {project_dir}/meta/clues.md → 已投放线索 + 待投放线索
+   [romance] {project_dir}/meta/romance_clues.md → 已投放情感信号 + 待投放情感信号
 
-5. drafts/chXX_draft.md（若存在）→ 当前章草稿全文（续写时衔接用）；否则读取上一章 chXX.md 最后500字
+5. {project_dir}/drafts/chXX_draft.md（若存在）→ 当前章草稿全文（续写时衔接用）；否则读取上一章 chXX.md 最后500字
 ```
 
 language 字段影响所有输出语言（正文、写作后记、三分选择、审阅报告均使用对应语言）。
 
 ⚠️ **每次 `/write` 的行为约束（近端提醒，每次必读）：**
-- **首先**：检查 drafts/chXX_draft.md 的段落数，确定本次写的是第1、2还是3段
+- **首先**：检查 `{project_dir}/drafts/chXX_draft.md` 的段落数，确定本次写的是第1、2还是3段
 - 本次只生成**一段**，约 900 字，到达对应停止点后立即结束
-- 生成结束后立即将本段 append 写入 `drafts/chXX_draft.md`
+- 生成结束后立即将本段 append 写入 `{project_dir}/drafts/chXX_draft.md`
 - 第1段结束 → 输出 [PAUSE-1/3] + 三分选择，等待用户回复
 - 第2段结束 → 输出 [PAUSE-2/3] + 三分选择，等待用户回复
 - 第3段结束 → 执行章节封存协议，重命名草稿文件为 chXX.md，输出编辑报告
@@ -128,13 +154,20 @@ language 字段影响所有输出语言（正文、写作后记、三分选择�
 [mystery]
 - 每章最多投放1条关键线索，可附带1条误导性线索
 - 线索必须"公平"——读者事后回看能发现，但初读不会立刻意识到
-- 每次投放后立即更新 `meta/clues.md` 的状态
+- 每次投放后立即更新 `{project_dir}/meta/clues.md` 的状态
 
 [romance]
 - 每章最多投放1个明确的情感信号（ES，Emotional Signal）
 - 可附带1个"反向信号"（误导读者认为感情倒退）
 - 情感信号必须嵌入场景/动作/对话，不得以叙述者口吻直接点明
-- 每次投放后立即更新 `meta/romance_clues.md` 的状态
+- 每次投放后立即更新 `{project_dir}/meta/romance_clues.md` 的状态
+
+**自动模式（`/auto-write`、`/auto-chapter`）注入差异：**
+- 必须明确锁定 `{project_dir}` 并传递给子任务，子任务仅在 `{project_dir}` 目录下读写
+- Writer 子任务的 prompt 中必须**内联** truth.md / relationship_arc.md 全文（子任务是独立 session，无法继承 Director 的上下文记忆）
+- Chooser 子任务的 prompt 中**禁止**包含 truth.md / relationship_arc.md 及未写到的 outline 内容
+- Director 自身保持轻量：只持有 outline + session_log + 当前 draft 状态
+- 详细的角色定义、prompt 模板和编排协议见 `references/auto_agents.md`
 
 ---
 

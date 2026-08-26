@@ -1,12 +1,25 @@
 # 写作循环：指令行为定义
 
-## `/write` — 推进剧情
+## 目标项目锁定协议（每次指令前必读）
+
+在执行本文件任何指令（`/write`, `/plan`, `/status`, `/clue`, `/edit`, `/recap`, `/finish`, `/review`, `/auto-write`, `/auto-chapter`）前，必须先确定目标小说目录 `{project_dir}`（即 `novels/{项目名}`）：
+
+1. **参数为 `new`**（如 `/auto-write new`、`/write new`）：跳转到 `references/init_flow.md` 执行初始化流程（若来自 `/auto-write new`，初始化完成后自动无缝进入第1章自动写作）。
+2. **参数包含项目名/路径**（如 `/auto-write 倒影的碎片`、`/write novels/雪祭`）：锁定 `{project_dir} = novels/{项目名}`。
+3. **会话已有上下文**：沿用当前会话已锁定的 `{project_dir}`。
+4. **未指定且存在多部小说**：仅列出 `novels/` 下的一级目录名，询问用户需要操作哪部小说或创建 `new`。**严禁擅自选择！**
+5. ⚠️ **隔离红线**：所有读写只能在 `{project_dir}` 内进行，**绝对严禁**扫描、读取或修改 `novels/` 下其他未锁定的兄弟小说目录。
+
+---
+
+## `/write [项目名|new]` — 推进剧情
 
 ### 执行前准备（必须完成，按顺序）
 
-**第0步：确定当前段落编号（每次 /write 必须先做这一步）**
+**第0步：确定目标项目与当前段落编号（每次 /write 必须先做这一步）**
 
-检查 `drafts/chXX_draft.md` 是否存在：
+1. 确认已锁定 `{project_dir}`（若指令为 `/write new` 则转入初始化流程）
+2. 检查 `{project_dir}/drafts/chXX_draft.md` 是否存在：
 - 文件不存在 → 当前为**第1段**，本次 /write 将创建文件
 - 文件存在，内容只有1段（约900字）→ 当前为**第2段**
 - 文件存在，内容有2段（约1800字）→ 当前为**第3段（最终段）**
@@ -14,17 +27,17 @@
 判断完成后，在内心确认："本次我将写第X/3段"，并以此决定本次输出的结束行为（暂停 or 封存协议）。
 
 ```
-0. 读取 meta/project_info.md，获取 genre 和 language 字段
+0. 读取 {project_dir}/meta/project_info.md，获取 genre 和 language 字段
    - genre: mystery → 执行推理版逻辑（以下步骤1-6不变）
    - genre: romance → 执行爱情版逻辑（步骤2替换，步骤3字段调整，见下方）
    - language: zh / en → 确认本次 /write 输出语言
 
-1. 读取 meta/style_guide.md（仅加载"绝对禁止"和"样板句式"两节）
+1. 读取 {project_dir}/meta/style_guide.md（仅加载"绝对禁止"和"样板句式"两节）
 
-2. [mystery] 读取 meta/truth.md（提醒自己不能泄露的信息）
-   [romance] 读取 meta/relationship_arc.md（关系弧线文档，了解当前章节的情感状态目标）
+2. [mystery] 读取 {project_dir}/meta/truth.md（提醒自己不能泄露的信息）
+   [romance] 读取 {project_dir}/meta/relationship_arc.md（关系弧线文档，了解当前章节的情感状态目标）
 
-3. 读取 meta/characters.md（本章出场角色）
+3. 读取 {project_dir}/meta/characters.md（本章出场角色）
    ⚠️ 首次出场角色只加载以下字段：
    - 出场前读者已知信息
    - 出场引入方式
@@ -32,12 +45,12 @@
    [mystery] 完整档案（性格、动机、隐瞒的事）须在该角色二次出场后才解锁。
    [romance] 完整档案（性格、情感盲区、情感起点）须在该角色二次出场后才解锁。
 
-4. [mystery] 读取 meta/clues.md（已投放 / 待投放线索）
-   [romance] 读取 meta/romance_clues.md（情感信号投放状态）
+4. [mystery] 读取 {project_dir}/meta/clues.md（已投放 / 待投放线索）
+   [romance] 读取 {project_dir}/meta/romance_clues.md（情感信号投放状态）
 
-5. 若 drafts/chXX_draft.md 存在：读取全文（衔接 + 确认段落数）；否则读取上一章 chXX.md 最后500字
+5. 若 {project_dir}/drafts/chXX_draft.md 存在：读取全文（衔接 + 确认段落数）；否则读取上一章 chXX.md 最后500字
 
-6. 读取 meta/outline.md 中本章的计划节点
+6. 读取 {project_dir}/meta/outline.md 中本章的计划节点
 ```
 
 ### 写作前行为预检
@@ -62,15 +75,15 @@
 
 **重要：每次 `/write` 只生成一段。** 模型不自行连续生成三段——暂停由对话结构保证，而非模型自我中断。
 
-**第一段（约900字）**：开场，推进到一个"信息悬停点"后结束本次输出，将本段正文 **append 写入** `drafts/chXX_draft.md`，然后给出三分选择，等待用户回应。
-**第二段（约900字）**：根据用户在第一段后的选择推进，到"张力转折点"后结束本次输出，将本段正文 **append 写入** 同一 `drafts/chXX_draft.md`，给出三分选择，等待用户回应。
-**第三段（约900字）**：收拢本章，以"悬而未决的尾音"结束——不解答，提出下一章的核心问题。将本段正文 **append 写入** 同一 `drafts/chXX_draft.md`，然后执行章节封存协议，将 `chXX_draft.md` 重命名为正式章节文件 `chXX.md`。
+**第一段（约900字）**：开场，推进到一个"信息悬停点"后结束本次输出，将本段正文 **append 写入** `{project_dir}/drafts/chXX_draft.md`，然后给出三分选择，等待用户回应。
+**第二段（约900字）**：根据用户在第一段后的选择推进，到"张力转折点"后结束本次输出，将本段正文 **append 写入** 同一 `{project_dir}/drafts/chXX_draft.md`，给出三分选择，等待用户回应。
+**第三段（约900字）**：收拢本章，以"悬而未决的尾音"结束——不解答，提出下一章的核心问题。将本段正文 **append 写入** 同一 `{project_dir}/drafts/chXX_draft.md`，然后执行章节封存协议，将 `chXX_draft.md` 重命名为正式章节文件 `chXX.md`。
 
 **文件写入规则：**
-- 草稿文件命名：`drafts/chXX_draft.md`（XX 为两位数章节号，如 `ch03_draft.md`）
+- 草稿文件命名：`{project_dir}/drafts/chXX_draft.md`（XX 为两位数章节号，如 `ch03_draft.md`）
 - 第一段写入时：创建文件并写入章节标题 + 正文
 - 第二、三段写入时：append 到同一文件末尾，不覆盖
-- 第三段写完、封存协议执行完毕后：将 `chXX_draft.md` 重命名为 `chXX.md`，草稿文件不再保留
+- 第三段写完、封存协议执行完毕后：将 `{project_dir}/drafts/chXX_draft.md` 重命名为 `{project_dir}/drafts/chXX.md`，草稿文件不再保留
 
 每次输出结束格式（第一、二段用）：
 ```
@@ -145,16 +158,17 @@ C. [选项]
 
 ---
 
-## `/plan` — 规划章节走向
+## `/plan [项目名]` — 规划章节走向
 
 **适用场景**：用户不确定下一步怎么走，想先讨论结构再写
 
 ### 执行流程
 
 ```
-1. 读取 meta/outline.md 了解整体进度
-2. 读取 meta/session_log.md 了解最近走向
-3. 读取 meta/clues.md 了解线索投放进度
+1. 确认目标项目 {project_dir}
+2. 读取 {project_dir}/meta/outline.md 了解整体进度
+3. 读取 {project_dir}/meta/session_log.md 了解最近走向
+4. 读取 {project_dir}/meta/clues.md 了解线索投放进度
 ```
 
 ### 输出格式
@@ -182,7 +196,7 @@ C. [选项]
 
 ---
 
-## `/status` — 查看当前状态
+## `/status [项目名]` — 查看当前状态
 
 **适用场景**：用户想了解项目当前状态，或恢复写作前的快速回顾
 
@@ -225,7 +239,7 @@ C. [选项]
 1. 接收用户的线索描述
 2. 判断线索类型：关键线索 / 误导线索 / 氛围线索
 3. 在下一段正文中自然植入（不特意强调）
-4. 写作后立即更新 meta/clues.md
+4. 写作后立即更新 {project_dir}/meta/clues.md
 ```
 
 ### 植入原则
@@ -266,7 +280,7 @@ C. [选项]
 
 ### 执行逻辑
 
-读取 `meta/session_log.md` 中最近 N 章的条目（默认 N=3），整合输出：
+读取 `{project_dir}/meta/session_log.md` 中最近 N 章的条目（默认 N=3），整合输出：
 
 ```
 【最近X章回顾】
@@ -283,7 +297,7 @@ C. [选项]
 
 ## 章节摘要日志格式（session_log.md）
 
-每章完成后，追加以下格式条目：
+每章完成后，追加以下格式条目到 `{project_dir}/meta/session_log.md`：
 
 ```markdown
 ## 第X章 摘要
@@ -307,20 +321,21 @@ C. [选项]
 
 ---
 
-## `/finish` — 完成并合并小说
+## `/finish [项目名]` — 完成并合并小说
 
 **适用场景**：所有章节写完，用户希望生成最终的完整小说文件
 
 ### 执行逻辑
 
 ```
-1. 读取 meta/project_info.md 确认项目名
-2. 列出 drafts/ 下所有章节文件，按 ch01, ch02, ... 排序
-3. 生成合并文件：
+1. 确认目标项目 {project_dir}
+2. 读取 {project_dir}/meta/project_info.md 确认项目名
+3. 列出 {project_dir}/drafts/ 下所有章节文件，按 ch01, ch02, ... 排序
+4. 生成合并文件：
    - 开头：书名标题 + 章节目录
    - 依次读取每个章节文件，之间用 --- 分隔
-4. 保存到 novels/{项目名}/{项目名}.md
-5. 输出完成信息
+5. 保存到 {project_dir}/{项目名}.md
+6. 输出完成信息
 ```
 
 ### 合并文件格式
@@ -347,7 +362,7 @@ C. [选项]
 ✅ 小说已完成！
 
 《{书名}》共 {N} 章，完整文件已保存到：
-{项目路径}/{项目名}.md
+{project_dir}/{项目名}.md
 
 感谢这次共创旅程。
 ```
@@ -356,7 +371,7 @@ C. [选项]
 
 ## 两轮全稿审阅协议
 
-> 在 `/finish` 执行完毕后自动触发，也可通过 `/review` 手动调用。
+> 在 `/finish` 执行完毕后自动触发，也可通过 `/review [项目名]` 手动调用。
 > 两轮审阅按顺序执行，不可跳过第一轮直接进入第二轮。
 
 ---
@@ -365,7 +380,7 @@ C. [选项]
 
 **目标**：扫描跨章节的逻辑矛盾、称呼漂移、时代感失真。
 **视角**：持有 `truth.md`，以作者身份检查。
-**输入**：全部 `chXX.md` 文件 + `meta/characters.md` + `meta/style_guide.md`
+**输入**：全部 `{project_dir}/drafts/chXX.md` 文件 + `{project_dir}/meta/characters.md` + `{project_dir}/meta/style_guide.md`
 
 逐章扫描，重点检查以下四类问题：
 
@@ -406,12 +421,12 @@ C. [选项]
 
 ---
 
-### 第二轮：文学编辑评审
+#### 第二轮：文学编辑评审
 
 [mystery]
 **目标**：从资深推理小说编辑视角判断整部作品的出版价值与核心问题。
 **视角**：不持有 `truth.md`，以第一次读稿的编辑身份进行判断。
-**输入**：全部 `chXX.md` 文件
+**输入**：全部 `{project_dir}/drafts/chXX.md` 文件
 
 **输出格式**：
 
@@ -437,7 +452,7 @@ C. [选项]
 [romance]
 **目标**：从资深爱情小说编辑视角判断整部作品的情感真实性与读者体验。
 **视角**：不持有 `relationship_arc.md`，以第一次读稿的编辑身份进行判断。
-**输入**：全部 `chXX.md` 文件
+**输入**：全部 `{project_dir}/drafts/chXX.md` 文件
 
 **输出格式**：
 
@@ -480,7 +495,7 @@ C. [选项]
 
 以上问题共涉及 X 处需修改内容。
 
-你有两个选择：
+你可以有两个选择：
 A. 逐条处理 → 告诉我"处理第X条"，我会定位到对应章节段落，进入 /edit 流程
 B. 暂时搁置 → 先合上报告，稍后再回来处理
 
@@ -488,7 +503,131 @@ B. 暂时搁置 → 先合上报告，稍后再回来处理
 ```
 
 用户确认某条问题后，自动执行：
-1. 读取对应 `chXX.md` 的目标段落
+1. 读取对应 `{project_dir}/drafts/chXX.md` 的目标段落
 2. 说明修改目标（来自审阅报告中的建议方向）
 3. 进入 `/edit` 流程，等待用户确认或进一步调整
-4. 修改完成后，更新 `chXX.md`，并在 `session_log.md` 中追加修改记录
+4. 修改完成后，更新 `{project_dir}/drafts/chXX.md`，并在 `{project_dir}/meta/session_log.md` 中追加修改记录
+
+---
+
+## `/auto-write [项目名|new]` — 自动写作模式
+
+> 详细角色定义、Prompt 模板和通信协议见 `references/auto_agents.md`。
+
+### 前置检查与项目锁定（必须通过才能开始）
+
+```
+1. 目标判定：
+   - 若参数为 new（如 /auto-write new）：
+     a. 调用 references/init_flow.md 引导用户完成前置选择与4轮对话
+     b. 生成 novels/{项目名}/ 及其下 meta/ 和 drafts/ 文件
+     c. 锁定 {project_dir} = novels/{项目名}
+     d. 初始化完毕后【自动无缝启动】全书自动写作流水线（从第1章开始）
+   - 若参数指定了项目名/路径（如 /auto-write 倒影的碎片）：
+     锁定 {project_dir} = novels/{项目名}
+   - 若未指定且当前无上下文：
+     列出 novels/ 下的一级小说目录供用户选择（或输入 new）；严禁擅自挑选！
+2. 确认 {project_dir}/meta/ 目录下所有必要文件存在（project_info, style_guide, truth/relationship_arc, characters, clues/romance_clues, outline, session_log）
+3. 读取 {project_dir}/meta/project_info.md 获取 genre、language
+4. 读取 {project_dir}/meta/outline.md 确定总章节数
+5. 读取 {project_dir}/meta/session_log.md 并检查 {project_dir}/drafts/ 确定当前进度（已完成的章节数）
+6. 向用户确认并汇报初始状态："《{书名}》将从第 X 章自动写到第 Y 章（共 Z 章），启动自动化写作循环..."
+```
+
+### 执行流程
+
+Director（主 Agent 自身）按以下循环执行：
+
+```
+对于每一章 (chapter = 当前进度+1 到 总章数):
+  
+  ── 段落 1 ──
+  1. 按 auto_agents.md 中的模板构建 Writer prompt
+     （注入 {project_dir} 上下文：style_guide + truth/arc + characters + clues + outline + 上章尾）
+  2. 派发 Writer 子任务
+  3. 收到 Writer 返回：确认正文已写入 {project_dir}/drafts/chXX_draft.md + 提取三分选择
+  4. 基于 session_log + 当前 draft 生成剧情摘要（200字以内）
+  5. 按模板构建 Chooser prompt（剧情摘要 + 三分选择，⚠️ 绝不含 truth/arc）
+  6. 派发 Chooser 子任务
+  7. 收到 Chooser 返回：走向选择 (A/B/C) + 理由
+  
+  ── 段落 2 ──
+  8. 按模板构建 Writer prompt（追加 Chooser 的第1段走向选择 + 当前草稿全文）
+  9. 派发 Writer 子任务
+  10. 收到 Writer 返回：确认第2段已 append 写入草稿 + 提取三分选择
+  11. 构建 Chooser prompt（更新剧情摘要 + 三分选择）
+  12. 派发 Chooser 子任务
+  13. 收到 Chooser 返回：走向选择 (A/B/C) + 理由
+  
+  ── 段落 3（收拢 + 封存）──
+  14. 构建 Writer prompt（指明"第3段，收拢本章" + Chooser 的第2段走向选择 + 要求执行封存协议和责任编辑审阅）
+  15. 派发 Writer 子任务
+  16. 收到 Writer 返回：正文（已重命名为 {project_dir}/drafts/chXX.md）+ 封存协议结果 + 编辑审阅报告
+  
+  ── 自动编辑 ──
+  17. 解析编辑报告中的问题清单：
+      - 🔴 必须修改 → 立即派发 Writer 子任务执行精准 /edit 修复并更新章节文件
+      - 🟡 建议修改 → 记录到 {project_dir}/meta/session_log.md，不阻断主流程
+      - 🟢 观察记录 → 忽略
+  
+  ── 进度汇报 ──
+  18. 向用户输出本章完成状态与进度看板
+  19. 继续下一章
+
+全部章节完成后：
+  20. 执行 /finish（按序合并所有 {project_dir}/drafts/chXX.md 为完整小说文件 {project_dir}/{项目名}.md）
+  21. 自动触发两轮全稿审阅（/review：第一轮一致性核查 + 第二轮文学编辑评审）
+  22. 全稿审阅中的 🔴 级别问题自动派发 Writer /edit 修复
+  23. 向用户输出最终完成报告与成果展示
+```
+
+### 进度汇报格式
+
+每章完成后，Director 向用户输出进度卡片：
+
+```
+📖 《{书名}》自动创作进行中...
+
+✅ 第1章 完成 ({字数}字) — Chooser选择: [A → B → 收拢] — 编辑: 🟢
+✅ 第2章 完成 ({字数}字) — Chooser选择: [B → A → 收拢] — 编辑: 🟡 (1条建议已记录)
+✅ 第3章 完成 ({字数}字) — Chooser选择: [C → B → 收拢] — 编辑: 🔴→🟢 (已自动修复1处)
+⏳ 第4章 写作中...
+⬜ 第5-{总章数}章 待写
+
+当前进度：{已完成章数}/{总章数} ({百分比}%)
+```
+
+### 异常处理
+
+| 异常场景 | 处理机制 |
+|----------|----------|
+| Writer 子任务执行超时/失败 | 自动重试 1 次；若仍失败，暂停并向用户报错请求干预 |
+| Chooser 子任务失败 | Director 默认选用选项 A 继续推进，并在日志中记录警告 |
+| 草稿写入冲突或状态不一致 | Director 重新扫描 `{project_dir}/drafts/` 目录读取最新实体文件后重新组装 prompt |
+| 上下文过长 | 压缩历史 session_log，仅保留最近 2 章条目和核心 meta 禁忌 |
+
+---
+
+## `/auto-chapter [项目名|new]` — 单章自动写作
+
+与 `/auto-write` 采用相同的 Director / Writer / Chooser 三角色协作机制，但执行范围仅限定为**当前正在进行的这一个章节**。
+
+### 执行流程
+
+1. 执行 `/auto-write` 相同的前置检查与项目锁定（若为 `new` 则先初始化并自动写完第1章）
+2. 仅执行当前单章的写作流水线（第1段 → Chooser → 第2段 → Chooser → 第3段收拢 + 章节封存 + 编辑审阅 + 🔴自动修复）
+3. 章节完成后输出本章结算看板与决策提示：
+
+```
+✅ 第 {N} 章 自动写作完成 ({字数}字)
+
+Chooser 选择路径：{段1选择} → {段2选择} → 收拢
+编辑审阅：{🔴×0 🟡×1 🟢×2}
+
+下一步可选：
+- 输入 /auto-chapter 继续自动写下一章
+- 输入 /auto-write 自动写完剩余全部章节
+- 输入 /write 切回交互式单段手动共创
+- 输入 /plan 先讨论后续章节架构
+```
+
