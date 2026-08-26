@@ -1,6 +1,6 @@
 ---
 name: interactive-novel
-description: 交互式与自主长篇小说创作工具。支持推理悬疑、爱情两种题材，支持中英文写作。当用户提到写小说、创作故事、生成章节、构建人物、提到推理/悬疑/言情，或输入 /auto-write、/auto-write new、/auto-chapter、/write、/plan、/status、/review、/finish 等指令时，必须激活此 Skill。用户说"我想写小说"、"帮我创作故事"、"自动写小说"、"I want to write a novel"时必须使用。
+description: 交互式与自主长篇小说创作工具。支持推理悬疑、爱情两种题材，支持中英文写作。当用户提到写小说、创作故事、生成章节、构建人物、提到推理/悬疑/言情，或输入 /auto-write、/auto-write new、/auto-chapter、/auto-pause、/write、/plan、/status、/review、/finish 等指令时，必须激活此 Skill。用户说"我想写小说"、"帮我创作故事"、"自动写小说"、"I want to write a novel"时必须使用。
 ---
 
 # 交互式长篇小说共创 Skill
@@ -107,7 +107,7 @@ C. [选项名]
 
 | 指令 | 功能 |
 |------|------|
-| `/write [项目名\|new]` | 生成本章下一段（约900字）并立即写入 `{project_dir}/drafts/chXX_draft.md`。每章共三段，每段结束后暂停等待用户选择走向。第三段结束后自动执行**章节封存协议**（meta更新 + 责任编辑审阅），草稿文件升格为正式章节文件。若带 `new` 则先初始化。 |
+| `/write [项目名\|new]` | 生成本章下一段（zh 约900字 / en 约600词）并立即写入 `{project_dir}/drafts/chXX_draft.md`。每章共三段，每段结束后暂停等待用户选择走向。第三段结束后自动执行**章节封存协议**（meta更新 + 责任编辑审阅），草稿文件升格为正式章节文件。若带 `new` 则先初始化。 |
 | `/plan [项目名]` | 不写正文，讨论接下来2-3章的走向，给出3个结构方案 |
 | `/status [项目名]` | 显示当前人物状态、未解伏笔、线索投放进度、待处理编辑意见 |
 | `/clue [描述]` | 在当前段落植入一条线索或伏笔，自动记录到 `{project_dir}/meta/clues.md` |
@@ -115,8 +115,9 @@ C. [选项名]
 | `/recap [N]` | 生成最近N章的摘要（默认3章） |
 | `/finish [项目名]` | 所有章节写完后，将 `{project_dir}/drafts/` 合并为完整小说文件 `{project_dir}/{项目名}.md`，并自动触发两轮全稿审阅 |
 | `/review [项目名]` | 手动触发两轮全稿审阅（第一轮：一致性核查；第二轮：文学编辑评审）。可在 `/finish` 后使用，也可在任意阶段单独调用。审阅完成后输出问题清单，并提示用户确认后触发对应段落的 `/edit` |
-| `/auto-write [项目名\|new]` | 自动完成从当前进度到全书终章。若为 `new` 则先初始化后自动开写。通过子任务机制派发 Writer（写正文）和 Chooser（选走向）。Writer 持有 truth.md / relationship_arc.md，Chooser 不持有——模拟读者视角选择。🔴 编辑问题自动修复，🟡 记录不修。完成后自动执行 `/finish` + `/review`。详见 `references/auto_agents.md` |
-| `/auto-chapter [项目名\|new]` | 与 `/auto-write` 相同的 Writer/Chooser 机制，但只自动完成当前一章（3段）后暂停，等待用户决定是否继续。详见 `references/auto_agents.md` |
+| `/auto-write [项目名\|new]` | 自动完成从当前进度到全书终章。若为 `new` 则先初始化后自动开写。通过子任务机制派发 Writer（写正文，持真相）、Chooser（选走向，无真相+读者记忆）、Reviewer（每章审阅，无真相）。Writer 只写不审，Reviewer 提供真实读者视角；Director 核验输出、过滤审阅意见，🔴 有界自动修复（最多2轮），🟡 记录不修。支持中断恢复（auto_state.json）与运行期上帝指令。完成后自动执行 `/finish` + `/review`。详见 `references/auto_agents.md` |
+| `/auto-chapter [项目名\|new]` | 与 `/auto-write` 相同的 Writer/Chooser/Reviewer 机制，但只自动完成当前一章（3段）后暂停，等待用户决定是否继续。详见 `references/auto_agents.md` |
+| `/auto-pause [项目名]` | 请求暂停自动写作：当前章节流水线完整走完后停止（不截断本章），输出结算看板、断点位置与恢复方式 |
 
 ---
 
@@ -142,7 +143,7 @@ language 字段影响所有输出语言（正文、写作后记、三分选择�
 
 ⚠️ **每次 `/write` 的行为约束（近端提醒，每次必读）：**
 - **首先**：检查 `{project_dir}/drafts/chXX_draft.md` 的段落数，确定本次写的是第1、2还是3段
-- 本次只生成**一段**，约 900 字，到达对应停止点后立即结束
+- 本次只生成**一段**（zh 约900字 / en 约600词），到达对应停止点后立即结束
 - 生成结束后立即将本段 append 写入 `{project_dir}/drafts/chXX_draft.md`
 - 第1段结束 → 输出 [PAUSE-1/3] + 三分选择，等待用户回复
 - 第2段结束 → 输出 [PAUSE-2/3] + 三分选择，等待用户回复
@@ -165,8 +166,10 @@ language 字段影响所有输出语言（正文、写作后记、三分选择�
 **自动模式（`/auto-write`、`/auto-chapter`）注入差异：**
 - 必须明确锁定 `{project_dir}` 并传递给子任务，子任务仅在 `{project_dir}` 目录下读写
 - Writer 子任务的 prompt 中必须**内联** truth.md / relationship_arc.md 全文（子任务是独立 session，无法继承 Director 的上下文记忆）
-- Chooser 子任务的 prompt 中**禁止**包含 truth.md / relationship_arc.md 及未写到的 outline 内容
-- Director 自身保持轻量：只持有 outline + session_log + 当前 draft 状态
+- Chooser 子任务的 prompt 中**禁止**包含 truth.md / relationship_arc.md、characters.md、待投放线索及未写到的 outline 内容；必须注入读者安全前情 + Chooser 选择轨迹（读者记忆）
+- Reviewer 子任务的 prompt 中**禁止**包含 truth.md / relationship_arc.md 及待投放线索；角色条目须剔除「隐瞒的事」等真相指针字段——每章审阅由这个无真相视角的独立子任务执行，Writer 只写不审
+- Director 自身保持轻量：只持有 outline + session_log 摘要 + auto_state.json + 当前 draft 状态；每次子任务返回后必须做实体核验（文件增长、字数、标签可解析），不盲信报告
+- meta 写权：章节期间 Writer 独占 meta 三件套（仅封存时行使），Director 只写 auto_state.json / directives.md
 - 详细的角色定义、prompt 模板和编排协议见 `references/auto_agents.md`
 
 ---
