@@ -11,7 +11,7 @@ description: 交互式与自主长篇小说创作工具。支持推理悬疑、�
 
 ---
 
-## 核心协议：目标项目锁定与隔离红线（每次交互必读）
+## 核心协议：目标项目锁定与隔离红线（每次交互必读，唯一权威定义）
 
 在执行任何写作、查看或自动生成指令前，必须首先确定唯一的**目标项目目录 `{project_dir}`（即 `novels/{项目名}`）**：
 
@@ -32,197 +32,51 @@ description: 交互式与自主长篇小说创作工具。支持推理悬疑、�
 
 ## 快速判断：用户处于哪个阶段？
 
-收到用户消息后，先按上述锁定协议确定场景与 `{project_dir}`：
-
 ### 场景A：全新项目
-用户说"我想写一部小说"、"帮我开始创作"、或输入 `/auto-write new` / `/write new` 等 → 进入**初始化流程**（先读取 `references/init_flow.md`；若来自 `/auto-write new`，初始化完成后自动开启自动写作循环）。
+用户说"我想写一部小说"、"帮我开始创作"、或输入 `/auto-write new` / `/write new` 等 → 🔴 **先完整读取 `references/init_flow.md`** 再执行初始化（交互停止契约与逐字问题脚本以该文件为准，不得凭本文件摘要自编问题或选项）。若来自 `/auto-write new`，初始化完成后自动开启自动写作循环。
 
 ### 场景B：继续已有项目
-用户说"继续我的小说"、"写下一章"等 → 锁定 `{project_dir}`，执行检查：
-```
-1. 确认目标项目目录路径 {project_dir}（如未指定且存在多个则向用户确认）
-2. 读取 {project_dir}/meta/project_info.md 了解项目状态
-3. 读取 {project_dir}/meta/style_guide.md 加载风格宪法
-4. 读取 {project_dir}/meta/characters.md 获取最新角色状态
-5. 根据用户指令进入对应的写作指令
-```
+用户说"继续我的小说"、"写下一章"等 → 锁定 `{project_dir}`，读取 `{project_dir}/meta/project_info.md` 确认项目状态与 genre/language，然后按用户指令进入对应流程。
 
 ### 场景C：具体写作指令
-用户输入 `/write [项目名]`、`/plan [项目名]`、`/status [项目名]` 等 → 锁定 `{project_dir}` 后跳转到**写作循环**章节。
+用户输入 `/write`、`/plan`、`/status`、`/check_pace`、`/clue`、`/edit`、`/recap`、`/finish`、`/review` 等 → 🔴 **先完整读取 `references/writing_loop.md`**（指令行为、上下文注入规则、章节封存协议、责任编辑机制、全稿审阅的唯一权威定义），再执行。
 
 ### 场景D：自动写作
-用户说"自动写完"、"auto write"等，或使用 `/auto-write [项目名|new]` / `/auto-chapter [项目名|new]` 指令：
-- 若参数为 `new`：进入初始化流程，完成后自动开始全书写作。
-- 若已有项目：锁定 `{project_dir}`，确认 `{project_dir}/meta/` 文件齐全，读取 `references/auto_agents.md` 进入**自动写作流程**。
+用户使用 `/auto-write [项目名|new]` / `/auto-chapter [项目名|new]` / `/auto-pause`，或说"自动写完" → 🔴 **先完整读取 `references/auto_agents.md` 与 `references/writing_loop.md`**（前者定义 Director/Writer/Chooser/Reviewer 四角色协议，后者定义指令行为与全稿审阅），再执行。
 
 ---
 
-## 初始化流程
+## 初始化流程（摘要）
 
-> 🔴 **进入初始化前必须先完整读取 `references/init_flow.md`**，问题脚本以该文件为准（本节摘要不是脚本，不得凭摘要自编问题或选项）。
-> 🔴 **交互停止契约**：初始化的每一轮（含前置选择、4轮问答、基本信息收集）输出后立即停止，等待用户真实回复。严禁自问自答、严禁以"用户选择了X"代替真实回复——即使指令是 `/auto-write new`，`auto` 也只作用于初始化完成后的写作流水线。详见 `references/init_flow.md` 开头的"交互停止契约"。
+初始化分为**"前置选择 + 4轮对话 + 基本信息收集"**（脚本与契约见 `references/init_flow.md`）：
 
-初始化分为**"前置选择 + 4轮对话 + 基本信息收集"**。前置选择确定题材（mystery/romance）和语言（zh/en），4轮对话根据题材加载对应问题，基本信息收集书名/主角/案件起点后，生成项目文件。
-
-**[mystery 版本]**
-第1轮：世界感（时代氛围）
-第2轮：案件骨架（诡计性质）
-第3轮：核心张力（侦探与案件的关系）
-第4轮：结局基调
-4轮完成后，读取 `references/genres/genre_mystery.md` 生成完整项目文件。
-
-**[romance 版本]**
-第1轮：关系的土壤（背景环境）
-第2轮：感情的阻力（障碍类型）
-第3轮：叙事视角
-第4轮：结局基调
-4轮完成后，读取 `references/genres/genre_romance.md` 生成完整项目文件。
-
-所有项目均创建在 `novels/{项目名}/` 目录下。
-
-每轮格式固定：
-```
-【第X轮：XXX】
-
-你提问的引导语（1-2句话，让用户理解这个选择的意义）
-
-A. [选项名] 
-   → 如果选这个，故事会是什么感觉（2-3句话的预告）
-
-B. [选项名]
-   → 如果选这个，故事会是什么感觉
-
-C. [选项名]
-   → 如果选这个，故事会是什么感觉
-
-（也可以告诉我你有完全不同的想法）
-```
-
-4轮完成后，读取对应题材的 genre 指南生成完整项目文件，并将项目创建在 `novels/{项目名}/` 目录下。
+- 前置选择：题材（mystery/romance）+ 语言（zh/en）
+- **[mystery]** 4轮：世界感 / 案件骨架 / 核心张力 / 结局基调 → 读取 `references/genres/genre_mystery.md` 生成项目文件
+- **[romance]** 4轮：关系的土壤 / 感情的阻力 / 叙事视角 / 结局基调 → 读取 `references/genres/genre_romance.md` 生成项目文件
+- 每轮格式固定：引导语（1-2句）+ A/B/C 选项（各附2-3句预告）+ "（也可以告诉我你有完全不同的想法）"
+- 🔴 交互停止契约：每轮输出后立即停止，等待用户真实回复；严禁自问自答（详见 init_flow.md 开头）
+- 基本信息收集（书名/主角/案件起点或关系起点）完成后生成项目文件，所有项目创建在 `novels/{项目名}/` 下
 
 ---
 
 ## 写作循环：核心指令
 
-> 详细行为定义见 `references/writing_loop.md`
+> 详细行为定义见 `references/writing_loop.md`（上下文注入规则、封存协议、责任编辑机制）；自动模式的子任务角色与通信协议见 `references/auto_agents.md`。
 
 | 指令 | 功能 |
 |------|------|
-| `/write [项目名\|new]` | 生成本章下一段（zh 约900字 / en 约600词）并立即写入 `{project_dir}/drafts/chXX_draft.md`。每章共三段，每段结束后暂停等待用户选择走向。第三段结束后自动执行**章节封存协议**（meta更新 + 责任编辑审阅），草稿文件升格为正式章节文件。若带 `new` 则先初始化。 |
+| `/write [项目名\|new]` | 生成本章下一段（zh 约900字 / en 约600词）并写入草稿；每章三段，段间暂停给三分选择；第三段后执行章节封存协议（meta更新+责任编辑审阅） |
 | `/plan [项目名]` | 不写正文，讨论接下来2-3章的走向，给出3个结构方案 |
 | `/status [项目名]` | 显示当前人物状态、未解伏笔、线索投放进度、待处理编辑意见 |
-| `/check_pace [项目名]` | 节奏诊断：基于 session_log 与线索/信号投放状态，对照当前题材的张力曲线输出诊断与调整建议（诊断逻辑见对应 genre 指南） |
-| `/clue [描述]` | 在当前段落植入一条线索或伏笔，自动记录到 `{project_dir}/meta/clues.md` |
-| `/edit [要求]` | 针对最近生成的段落进行修改，用自然语言描述要求 |
+| `/check_pace [项目名]` | 节奏诊断（诊断逻辑见对应 genre 指南） |
+| `/clue [描述]` | 在当前段落植入一条线索或伏笔并登记到 meta |
+| `/edit [要求]` | 针对最近生成的段落进行修改 |
 | `/recap [N]` | 生成最近N章的摘要（默认3章） |
-| `/finish [项目名]` | 所有章节写完后，将 `{project_dir}/drafts/` 合并为完整小说文件 `{project_dir}/{项目名}.md`，并自动触发两轮全稿审阅 |
-| `/review [项目名]` | 手动触发两轮全稿审阅（第一轮：一致性核查；第二轮：文学编辑评审）。可在 `/finish` 后使用，也可在任意阶段单独调用。审阅完成后输出问题清单，并提示用户确认后触发对应段落的 `/edit` |
-| `/auto-write [项目名\|new]` | 自动完成从当前进度到全书终章。若为 `new` 则先初始化后自动开写。通过子任务机制派发 Writer（写正文，持真相）、Chooser（选走向，无真相+读者记忆）、Reviewer（每章审阅，无真相）。Writer 只写不审，Reviewer 提供真实读者视角；Director 核验输出、过滤审阅意见，🔴 有界自动修复（最多2轮），🟡 记录不修。支持中断恢复（auto_state.json）与运行期上帝指令。完成后自动执行 `/finish` + `/review`。详见 `references/auto_agents.md` |
-| `/auto-chapter [项目名\|new]` | 与 `/auto-write` 相同的 Writer/Chooser/Reviewer 机制，但只自动完成当前一章（3段）后暂停，等待用户决定是否继续。详见 `references/auto_agents.md` |
-| `/auto-pause [项目名]` | 请求暂停自动写作：当前章节流水线完整走完后停止（不截断本章），输出结算看板、断点位置与恢复方式 |
-
----
-
-## 上下文注入规则
-
-**每次写作前，先锁定目标项目 `{project_dir}`，读取 `{project_dir}/meta/project_info.md` 确认 genre 和 language，再按顺序加载：**
-
-```
-1. {project_dir}/meta/style_guide.md → 风格宪法（仅加载"绝对禁止"和"样板句式"两节）
-
-2. [mystery] {project_dir}/meta/truth.md → 真相文档（完整加载，仅你可见，不在正文中泄露）
-   [romance] {project_dir}/meta/relationship_arc.md → 关系弧线（完整加载，仅你可见，指导情感节奏）
-
-3. {project_dir}/meta/characters.md → 仅加载本章出场角色的条目
-
-4. [mystery] {project_dir}/meta/clues.md → 已投放线索 + 待投放线索
-   [romance] {project_dir}/meta/romance_clues.md → 已投放情感信号 + 待投放情感信号
-
-5. {project_dir}/drafts/chXX_draft.md（若存在）→ 当前章草稿全文（续写时衔接用）；否则读取上一章 chXX.md 最后500字
-
-6. {project_dir}/meta/session_log.md 最近 2 章条目 → 跨章衔接与一致性核对基准（核心事件、角色变化、故事内时间/地点、信息增量、下章切入点）
-```
-
-language 字段影响所有输出语言（正文、写作后记、三分选择、审阅报告均使用对应语言）。
-
-⚠️ **每次 `/write` 的行为约束（近端提醒，每次必读）：**
-- **首先**：检查 `{project_dir}/drafts/chXX_draft.md` 的段落数，确定本次写的是第1、2还是3段
-- 本次只生成**一段**（zh 约900字 / en 约600词），到达对应停止点后立即结束
-- 生成结束后立即将本段 append 写入 `{project_dir}/drafts/chXX_draft.md`
-- 第1段结束 → 输出 [PAUSE-1/3] + 三分选择，等待用户回复
-- 第2段结束 → 输出 [PAUSE-2/3] + 三分选择，等待用户回复
-- 第3段结束 → 执行章节封存协议，重命名草稿文件为 chXX.md，输出编辑报告
-- 绝对不得跳段、合并段、或连续生成多段
-
-**线索/信号投放原则：**
-
-[mystery]
-- 每章最多投放1条关键线索，可附带1条误导性线索
-- 线索是**推理材料**而非伏笔：必须"公平"（回看成立）且**当下可用**（投放时读者即可参与推理），每条关键线索支持双重解释——支撑假真相的读法初读更自然，指向真相的读法回看成立
-- 假设操作以 outline.md 本章「假设操作」字段为准（建立/强化/推翻 H-X），推翻必须由证据驱动
-- 投放以 outline.md 本章计划为准，封存时执行线索预算核对 + 假设链核对（见写作循环）
-- 每次投放后立即更新 `{project_dir}/meta/clues.md` 的状态
-
-[romance]
-- 每章最多投放1个明确的情感信号（ES，Emotional Signal）
-- 可附带1个"反向信号"（误导读者认为感情倒退）
-- 情感信号必须嵌入场景/动作/对话，不得以叙述者口吻直接点明
-- 每次投放后立即更新 `{project_dir}/meta/romance_clues.md` 的状态
-
-**自动模式（`/auto-write`、`/auto-chapter`）注入差异：**
-- 必须明确锁定 `{project_dir}` 并传递给子任务，子任务仅在 `{project_dir}` 目录下读写
-- Writer 子任务的 prompt 中必须**内联** truth.md / relationship_arc.md 全文（子任务是独立 session，无法继承 Director 的上下文记忆）
-- Chooser 子任务的 prompt 中**禁止**包含 truth.md / relationship_arc.md、characters.md、待投放线索及未写到的 outline 内容；必须注入读者安全前情 + Chooser 选择轨迹（读者记忆）
-- Reviewer 子任务的 prompt 中**禁止**包含 truth.md / relationship_arc.md 及待投放线索；角色条目须剔除「隐瞒的事」等真相指针字段——每章审阅由这个无真相视角的独立子任务执行，Writer 只写不审
-- Director 自身保持轻量：只持有 outline + session_log 摘要 + auto_state.json + 当前 draft 状态；每次子任务返回后必须做实体核验（文件增长、字数、标签可解析），不盲信报告
-- meta 写权：章节期间 Writer 独占 meta 三件套（仅封存时行使），Director 只写 auto_state.json / directives.md
-- 详细的角色定义、prompt 模板和编排协议见 `references/auto_agents.md`
-
----
-
-## 章节完成后的固定动作
-
-> 每章写完，**强制**执行章节封存协议（详见 `references/writing_loop.md`）：
-
-```
-第一步：更新 meta/session_log.md（含故事内时间/地点、信息增量）✅
-第二步：更新 meta/characters.md（当前状态/当前已知信息/出场记录）✅
-第三步：更新 meta/clues.md + 线索预算核对 + 假设链核对（对照 outline，含揭示章双断言）✅
-第四步：一致性自查（七项清单：时间衔接/人物位置/物品身体状态/称谓/知识边界/凶手一致性/outline对照）✅
-↓
-（全部完成后）
-↓
-责任编辑 Review（自动派发，见下方）
-↓
-向用户呈现编辑报告 + 三分选择
-```
-
-**责任编辑机制（每章自动触发）：**
-
-封存协议完成后，以编辑身份重新审阅本章正文，从以下维度输出审阅报告：
-
-- **A. 风格一致性**：对照风格宪法，指出具体漂移位置
-
-- **[mystery] B. 读者视角模拟（推理版）**：
-  切换至不持有 truth.md 的视角。
-  此刻读者的**领先假设**是什么？支撑它的是哪些已投放线索？
-  认真的读者能否自己组织一次推理（哪怕推出的是错误答案——这正是假真相在起作用）？
-  哪个细节"太重要了"？哪里感到困惑？
-  本章的推理/发现场景中，气氛描写是否打断了推理节奏？
-
-- **[romance] B. 读者情感模拟（爱情版）**：
-  切换至不持有 relationship_arc.md 的视角（普通读者视角）。
-  此刻对两个主角的关系进展有什么期待和判断？
-  哪个情感信号"太明显"或"太刻意"？
-  哪段对话的感情克制度合适/过度/不足？
-
-- **C. 人物声音检查**：逐一核查本章角色对白是否与 characters.md 一致（说话方式 + 称谓；言行是否超出「当前已知信息」边界）
-
-- **D. 问题定级清单**：🔴 必须修改 / 🟡 建议修改 / 🟢 观察记录
-
-审阅完成后，主 agent 对照 truth.md 过滤意见，标注 `[采纳]` / `[保留]` / `[观察]`，向用户呈现处理后的报告。
-
-> 详细执行规范、编辑 Prompt 模板、过滤逻辑见 `references/writing_loop.md`
+| `/finish [项目名]` | 合并全书为完整小说文件，并自动触发两轮全稿审阅 |
+| `/review [项目名]` | 手动触发两轮全稿审阅（一致性核查 + 文学编辑评审） |
+| `/auto-write [项目名\|new]` | 自动完成从当前进度到全书终章：Writer/Chooser/Reviewer 子任务协作，Director 编排核验、过滤意见、有界修复；支持中断恢复与运行期上帝指令；完成后自动 /finish + 审阅 |
+| `/auto-chapter [项目名\|new]` | 相同机制，仅自动完成当前一章后暂停 |
+| `/auto-pause [项目名]` | 请求暂停：当前章流水线完整走完后停止，输出结算看板与恢复方式 |
 
 ---
 

@@ -89,8 +89,8 @@ Director 每次调用 Writer 子任务时，必须在 prompt 中内联以下内�
    [romance] 完整档案在角色二次出场后解锁
    ⚠️ 首次/二次出场判定一律以角色条目中的「出场记录」字段为准
 
-6. [mystery] {project_dir}/meta/clues.md（已投放 + 待投放线索）
-   [romance] {project_dir}/meta/romance_clues.md（情感信号投放状态）
+6. [mystery] {project_dir}/meta/clues.md **注入子集**（见 6.5 子集提取规则：活跃线索全条目 + 已揭示/已归档线索单行索引）
+    [romance] {project_dir}/meta/romance_clues.md **注入子集**（同上：活跃信号全条目 + 已化解/已归档信号单行索引）
 
 7. 当前 {project_dir}/drafts/chXX_draft.md 的内容（如存在）；否则上一章 chXX.md 最后 500 字
 
@@ -244,16 +244,10 @@ outline_exec: updated|failed
 - 角色状态变化：[描述]
 - 信息增量：[本章谁新获知了什么（角色→信息，含来源），或 none]
 - 读者已知 / 不知信息对比：已知：... 不知：...
-- Showing 自查：
-  [mystery] □ 侦探"判断出/意识到/感觉到"某结论？
-  [mystery] □ 侦探结论未引用可指认的已投放线索（凭直觉宣布）？
-  [mystery] □ 出现人物整段讲述真相/证据性信息的自白（讲解模式）？
-  [mystery] □ 凶手言行偏离 truth.md 伪装策略？
-  [mystery] □ 叙述或他人对白泄露"只有凶手知道的信息"？
-  [romance] □ 角色直接说出自己的感情状态？
-  [romance] □ 感情障碍在没有充分积累的前提下突然消解？
-  □ 叙述者直接说明人物的情绪？
-  □ 人物说出当代/时代不会说的哲理句？
+- Showing 自查（⚠️ 仅输出命中项，未命中的检查项与清单本身不要输出；无命中写"无"）：
+  [mystery] □ 侦探凭直觉宣布结论（未引用已投放线索）？ □ 讲解模式自白？ □ 凶手言行偏离伪装策略？ □ 叙述泄露只有凶手知道的信息？
+  [romance] □ 角色直接说出感情状态？ □ 障碍无积累突然消解？
+  通用 □ 叙述者直接说明情绪？ □ 时代错位哲理句？
 </postscript>
 ```
 
@@ -422,8 +416,8 @@ language: {language}
 ## 本章出场角色
 {从 {project_dir}/meta/characters.md 提取的对应角色条目}
 
-## 线索/信号状态
-{{project_dir}/meta/clues.md 或 {project_dir}/meta/romance_clues.md 内容}
+## 线索/信号状态（注入子集）
+{按 6.5 子集提取规则从 {project_dir}/meta/clues.md / romance_clues.md 提取：活跃（未揭示/未化解）线索全条目 + 已揭示且已拆穿线索的单行索引；「已归档」区不注入}
 
 ## 前情摘要（最近章节，你写作的衔接基准）
 {从 {project_dir}/meta/session_log.md 提取的最近 2 章条目：核心事件、角色变化、故事内时间/地点、信息增量、下章切入点}
@@ -508,25 +502,28 @@ language: {language}
 审阅纪律：每条意见必须引用正文原文位置；没有依据的夸赞或批评不要写。
 ```
 
-### 6.4 输出核验协议（Director 不盲信子任务报告）
+### 6.4 输出核验协议（Director 不盲信子任务报告；核验用工具命令，禁止全文读入）
+
+**核验纪律（控制 Director 上下文膨胀）**：正文已随 Writer 返回的 `<prose>` 存在于 Director 上下文中，🔴 **禁止再读取 draft 全文做核验**。文件增长、字数、段数一律用工具命令（`ls -l` / `wc -c` / `wc -w`）判断；meta 封存核验只做**定向读**（`tail` session_log 新增条目、grep outline 本章「实际执行」字段），不重读整个 meta 文件。
 
 **每次 Writer 返回后，Director 必须执行实体核验**：
 
 ```
-1. 文件核验：读取 {project_dir}/drafts/chXX_draft.md
+1. 文件核验（用 ls -l / wc -c 对比写入前后的字节数，不读内容）：
    - 文件未创建/未增长：
-     a. 若返回的 <prose> 内容完整 → Director 代为写入（append）
-     b. 若 <prose> 缺失或截断 → 重试整个 Writer 子任务 1 次；仍失败 → 暂停报错请求干预
-   - 字数核验（zh: 字符数 / en: 词数，工具命令近似统计即可）：
-     a. 低于下限（850字/550词）→ 派发补写子任务："仅将本段补写至达标后重新 append，不改动已有内容"
-     b. 高于上限（950字/650词）→ 接受（Writer 已确认无可拆分）
+      a. 若返回的 <prose> 内容完整 → Director 代为写入（append）
+      b. 若 <prose> 缺失或截断 → 重试整个 Writer 子任务 1 次；仍失败 → 暂停报错请求干预
+   - 字数核验（zh: wc -c 近似，1段 ≈ 2700字节 / en: wc -w，1段 ≈ 600词）：
+      a. 低于下限（850字/550词）→ 派发补写子任务："仅将本段补写至达标后重新 append，不改动已有内容"
+      b. 高于上限（950字/650词）→ 接受（Writer 已确认无可拆分）
+   - 段数判定（中断恢复/第0步同样适用）：按字节增长近似（zh 每段约2700字节 / en 每段约600词），或 grep 空行分段计数；不全文读入
 2. 段1/2：<choices> 可解析且含 A/B/C 三项 → 解析失败按第二节轻量重试
 3. 选项公平性核验：三个选项预告字数差距是否超过约 1 倍、某选项是否明显空洞/含糊
    → 可疑时要求 Writer 仅重新输出 <choices>（并提醒选项公平性原则）
 4. 段3额外核验：
-   - {project_dir}/drafts/chXX.md 是否存在（重命名是否执行）→ 未执行则 Director 代为重命名
+   - {project_dir}/drafts/chXX.md 是否存在（重命名是否执行，用 ls 判断）→ 未执行则 Director 代为重命名
    - <seal_report> 中标记 failed 的 meta 更新 → 由 Director 亲自补写对应文件
-   - 封存内容核验：session_log 新条目是否含「故事内时间/地点」「信息增量」字段；outline 本章「实际执行」是否已回写；缺漏 → Director 补写
+   - 封存内容核验（定向读）：tail session_log 检查新条目是否含「故事内时间/地点」「信息增量」字段；grep outline 本章「实际执行」是否已回写；缺漏 → Director 补写
 5. 修复任务核验：<fix_report>.applied = yes 且 meta_synced ≠ no（no → Director 亲自补写 meta 对应条目）
 ```
 
@@ -547,7 +544,13 @@ language: {language}
 - "信息增量"字段（记录各角色获知的内幕，可能含真相指针）
 - 任何 Writer 写作后记中引用 truth/arc 的推理内容
 
-从 `clues.md`（mystery）提取"已投放线索"注入 Reviewer 上下文时：
+从 `clues.md`（mystery）/ `romance_clues.md`（romance）注入 **Writer 上下文**时的子集提取规则（控制 prompt 膨胀，同时保持一致性所需信息完整）：
+- **全条目注入**：状态为"待投放"、"已投放未揭示/未化解"的活跃线索（这些是 Writer 防重投、防矛盾、执行假设操作的对象）；即使与本章无直接关联的活跃线索也保持全条目（防止叙述中意外触碰）
+- **单行索引注入**：状态为"已揭示且已拆穿/已化解"的线索（编号 + 一句话状态，如 `RH-02 已拆穿（CL-07）`——Writer 只需知道"不能再当悬念用"，无需细节）
+- **不注入**：「已归档」区条目
+- 一致性保障：活跃线索（双重解释未兑现的部分）一条不少；已拆穿线索保留可查索引。此规则不删减任何"仍可能被正文触碰"的线索
+
+从 `clues.md`（mystery）提取"已投放线索"注入 **Reviewer 上下文**时：
 - 仅保留：内容、表面作用、投放方式、投放记录
 - **剔除所有带 🔒 标记的真相指针字段**（双重解释、可用时点、所属假真相、推翻证据等——它们指向真相与假设链的终点）
 
