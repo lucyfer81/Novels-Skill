@@ -1,6 +1,6 @@
 ---
 name: interactive-novel
-description: 交互式与自主长篇小说创作工具。支持推理悬疑、爱情两种题材，支持中英文写作。当用户提到写小说、创作故事、生成章节、构建人物、提到推理/悬疑/言情，或输入 /auto-write、/auto-write new、/auto-chapter、/auto-pause、/write、/plan、/status、/review、/finish 等指令时，必须激活此 Skill。用户说"我想写小说"、"帮我创作故事"、"自动写小说"、"I want to write a novel"时必须使用。
+description: 交互式与自主长篇小说创作工具。支持推理悬疑、爱情两种题材，支持中英文写作。当用户提到写小说、创作故事、生成章节、构建人物、提到推理/悬疑/言情，或输入 /auto-write、/auto-write new、/auto-chapter、/auto-pause、/write、/plan、/status、/check_pace、/review、/finish 等指令时，必须激活此 Skill。用户说"我想写小说"、"帮我创作故事"、"自动写小说"、"I want to write a novel"时必须使用。
 ---
 
 # 交互式长篇小说共创 Skill
@@ -35,7 +35,7 @@ description: 交互式与自主长篇小说创作工具。支持推理悬疑、�
 收到用户消息后，先按上述锁定协议确定场景与 `{project_dir}`：
 
 ### 场景A：全新项目
-用户说"我想写一部小说"、"帮我开始创作"、或输入 `/auto-write new` / `/write new` 等 → 进入**初始化流程**（若来自 `/auto-write new`，初始化生成项目文件后自动开启自动写作循环）。
+用户说"我想写一部小说"、"帮我开始创作"、或输入 `/auto-write new` / `/write new` 等 → 进入**初始化流程**（先读取 `references/init_flow.md`；若来自 `/auto-write new`，初始化完成后自动开启自动写作循环）。
 
 ### 场景B：继续已有项目
 用户说"继续我的小说"、"写下一章"等 → 锁定 `{project_dir}`，执行检查：
@@ -59,9 +59,10 @@ description: 交互式与自主长篇小说创作工具。支持推理悬疑、�
 
 ## 初始化流程
 
-> 详细流程见 `references/init_flow.md`，以下是导航摘要。
+> 🔴 **进入初始化前必须先完整读取 `references/init_flow.md`**，问题脚本以该文件为准（本节摘要不是脚本，不得凭摘要自编问题或选项）。
+> 🔴 **交互停止契约**：初始化的每一轮（含前置选择、4轮问答、基本信息收集）输出后立即停止，等待用户真实回复。严禁自问自答、严禁以"用户选择了X"代替真实回复——即使指令是 `/auto-write new`，`auto` 也只作用于初始化完成后的写作流水线。详见 `references/init_flow.md` 开头的"交互停止契约"。
 
-初始化分为**"前置选择 + 4轮对话"**。前置选择确定题材（mystery/romance）和语言（zh/en），4轮对话根据题材加载对应问题。完成后自动生成项目文件。
+初始化分为**"前置选择 + 4轮对话 + 基本信息收集"**。前置选择确定题材（mystery/romance）和语言（zh/en），4轮对话根据题材加载对应问题，基本信息收集书名/主角/案件起点后，生成项目文件。
 
 **[mystery 版本]**
 第1轮：世界感（时代氛围）
@@ -110,6 +111,7 @@ C. [选项名]
 | `/write [项目名\|new]` | 生成本章下一段（zh 约900字 / en 约600词）并立即写入 `{project_dir}/drafts/chXX_draft.md`。每章共三段，每段结束后暂停等待用户选择走向。第三段结束后自动执行**章节封存协议**（meta更新 + 责任编辑审阅），草稿文件升格为正式章节文件。若带 `new` 则先初始化。 |
 | `/plan [项目名]` | 不写正文，讨论接下来2-3章的走向，给出3个结构方案 |
 | `/status [项目名]` | 显示当前人物状态、未解伏笔、线索投放进度、待处理编辑意见 |
+| `/check_pace [项目名]` | 节奏诊断：基于 session_log 与线索/信号投放状态，对照当前题材的张力曲线输出诊断与调整建议（诊断逻辑见对应 genre 指南） |
 | `/clue [描述]` | 在当前段落植入一条线索或伏笔，自动记录到 `{project_dir}/meta/clues.md` |
 | `/edit [要求]` | 针对最近生成的段落进行修改，用自然语言描述要求 |
 | `/recap [N]` | 生成最近N章的摘要（默认3章） |
@@ -137,6 +139,8 @@ C. [选项名]
    [romance] {project_dir}/meta/romance_clues.md → 已投放情感信号 + 待投放情感信号
 
 5. {project_dir}/drafts/chXX_draft.md（若存在）→ 当前章草稿全文（续写时衔接用）；否则读取上一章 chXX.md 最后500字
+
+6. {project_dir}/meta/session_log.md 最近 2 章条目 → 跨章衔接与一致性核对基准（核心事件、角色变化、故事内时间/地点、信息增量、下章切入点）
 ```
 
 language 字段影响所有输出语言（正文、写作后记、三分选择、审阅报告均使用对应语言）。
@@ -155,6 +159,7 @@ language 字段影响所有输出语言（正文、写作后记、三分选择�
 [mystery]
 - 每章最多投放1条关键线索，可附带1条误导性线索
 - 线索必须"公平"——读者事后回看能发现，但初读不会立刻意识到
+- 投放以 outline.md 本章计划为准，封存时执行线索预算核对（见写作循环）
 - 每次投放后立即更新 `{project_dir}/meta/clues.md` 的状态
 
 [romance]
@@ -179,10 +184,10 @@ language 字段影响所有输出语言（正文、写作后记、三分选择�
 > 每章写完，**强制**执行章节封存协议（详见 `references/writing_loop.md`）：
 
 ```
-第一步：更新 meta/session_log.md ✅
-第二步：更新 meta/characters.md ✅
-第三步：更新 meta/clues.md ✅
-第四步：一致性自查 ✅
+第一步：更新 meta/session_log.md（含故事内时间/地点、信息增量）✅
+第二步：更新 meta/characters.md（当前状态/当前已知信息/出场记录）✅
+第三步：更新 meta/clues.md + 线索预算核对（对照 outline，含揭示章断言）✅
+第四步：一致性自查（七项清单：时间衔接/人物位置/物品身体状态/称谓/知识边界/凶手一致性/outline对照）✅
 ↓
 （全部完成后）
 ↓
@@ -207,7 +212,7 @@ language 字段影响所有输出语言（正文、写作后记、三分选择�
   哪个情感信号"太明显"或"太刻意"？
   哪段对话的感情克制度合适/过度/不足？
 
-- **C. 人物声音检查**：逐一核查本章角色对白是否与 characters.md 一致
+- **C. 人物声音检查**：逐一核查本章角色对白是否与 characters.md 一致（说话方式 + 称谓；言行是否超出「当前已知信息」边界）
 
 - **D. 问题定级清单**：🔴 必须修改 / 🟡 建议修改 / 🟢 观察记录
 
@@ -229,8 +234,10 @@ novels/
     │   ├── style_guide.md       # 风格宪法（由4轮选择生成）
     │   ├── outline.md           # 宽松大纲（章节规划）
     │   ├── characters.md        # 角色档案（含动态状态字段）
-    │   ├── truth.md             # 真相文档（凶手/动机/完整案件经过）
-    │   ├── clues.md             # 线索地图
+    │   ├── [mystery] truth.md              # 真相文档（凶手/动机/完整案件经过）
+    │   │               clues.md            # 线索地图
+    │   ├── [romance]  relationship_arc.md  # 关系弧线（终局/双方真实情感时间线/障碍真相层）
+    │   │               romance_clues.md    # 情感信号地图
     │   └── session_log.md       # 每章摘要日志（含编辑审阅记录）
     ├── drafts/
     │   ├── ch01.md

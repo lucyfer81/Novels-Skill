@@ -87,17 +87,20 @@ Director 每次调用 Writer 子任务时，必须在 prompt 中内联以下内�
    ⚠️ 首次出场角色只注入：出场前读者已知信息 + 出场引入方式 + 身份
    [mystery] 完整档案在角色二次出场后解锁
    [romance] 完整档案在角色二次出场后解锁
+   ⚠️ 首次/二次出场判定一律以角色条目中的「出场记录」字段为准
 
 6. [mystery] {project_dir}/meta/clues.md（已投放 + 待投放线索）
    [romance] {project_dir}/meta/romance_clues.md（情感信号投放状态）
 
 7. 当前 {project_dir}/drafts/chXX_draft.md 的内容（如存在）；否则上一章 chXX.md 最后 500 字
 
-8. {project_dir}/meta/outline.md 中本章的计划节点
+8. 最近 2 章的剧情摘要（从 {project_dir}/meta/session_log.md 提取：核心事件、角色变化、故事内时间/地点、信息增量、下章切入点。⚠️ Writer 持有真相，注入无需脱敏——这是子任务衔接前情、避免跨章矛盾的主通道）
 
-9. 上帝指令（若 meta/directives.md 中存在未完成且适用于本章的指令）
+9. {project_dir}/meta/outline.md 中本章的计划节点（本章目标、应投线索、应揭秘密、应拆穿误导、章末钩子）
 
-10. 任务指令（见下方 3.4 节）
+10. 上帝指令（若 meta/directives.md 中存在未完成且适用于本章的指令）
+
+11. 任务指令（见下方 3.4 节）
 ```
 
 ### 3.3 写作规范（注入 Writer prompt）
@@ -127,8 +130,10 @@ Director 每次调用 Writer 子任务时，必须在 prompt 中内联以下内�
 
 [mystery]
 - 每章最多投放 1 条关键线索，可附带 1 条误导性线索
+- 线索投放以 outline.md 本章计划为准（应投 CL-/RH- 编号）；若实际偏离计划，必须在 <segment_meta> 中说明原因
 - 线索必须"公平"——读者事后回看能发现，但初读不会立刻意识到
 - 每次投放后立即更新 {project_dir}/meta/clues.md
+- 凶手以嫌疑人身份出场时，其公开言行必须符合 truth.md 的伪装策略与案发后行为线；叙述不得泄露"只有凶手知道的信息"
 
 [romance]
 - 每章最多投放 1 个明确的情感信号（ES）
@@ -189,6 +194,7 @@ Director 每次调用 Writer 子任务时，必须在 prompt 中内联以下内�
 2. 修改后全章字数变化控制在 ±10% 以内
 3. 严格遵守下方风格宪法与角色档案
 4. 修改后直接更新该文件，并输出 <fix_report>
+5. **meta 同步（强制）**：若改动涉及已投放线索的文本/位置、角色状态、称谓、时间线或角色获知的信息 → 同步更新 clues.md / characters.md 对应条目，并在 session_log.md 追加一行修改记录（此项结果写入 <fix_report> 的 meta_synced）
 ```
 
 （修复任务的 prompt 必须附：style_guide 两节 + 相关角色完整条目 + 问题所在段落的上下文，防止修复引入风格漂移。）
@@ -228,14 +234,18 @@ draft_renamed: yes|no
 session_log: updated|failed
 characters: updated|failed
 clues: updated|failed
+outline_exec: updated|failed
 </seal_report>
 
 <postscript>
 - 本章投放线索/信号：[描述]
 - 角色状态变化：[描述]
+- 信息增量：[本章谁新获知了什么（角色→信息，含来源），或 none]
 - 读者已知 / 不知信息对比：已知：... 不知：...
 - Showing 自查：
   [mystery] □ 侦探"判断出/意识到/感觉到"某结论？
+  [mystery] □ 凶手言行偏离 truth.md 伪装策略？
+  [mystery] □ 叙述或他人对白泄露"只有凶手知道的信息"？
   [romance] □ 角色直接说出自己的感情状态？
   [romance] □ 感情障碍在没有充分积累的前提下突然消解？
   □ 叙述者直接说明人物的情绪？
@@ -249,6 +259,7 @@ clues: updated|failed
 <fix_report>
 problem: [原问题一句话复述]
 applied: yes|partial|no
+meta_synced: yes|no|not_needed
 summary: [实际改了什么，2句话]
 </fix_report>
 ```
@@ -340,9 +351,10 @@ Director 构建 Chooser prompt 时，**仅**传入以下内容：
 3. 上一章的读者安全摘要（连续性参照，提取规则见 6.5）
 4. 本章正文全文（{project_dir}/drafts/chXX.md）
 5. {project_dir}/meta/style_guide.md 的「绝对禁止」和「样板句式」两节
-6. 本章出场角色条目（脱敏版）：保留身份、性格、说话方式、当前状态；
+6. 本章出场角色条目（脱敏版）：保留身份、性格、说话方式、当前状态、称谓、当前已知信息；
    [mystery] 必须剔除「隐瞒的事」及任何指向真相的字段
-   [romance] 必须剔除与 relationship_arc 重复的终局性字段
+   [romance] 必须剔除「情感起点」「情感盲区」等与 relationship_arc.md 重复的终局性字段
+   （「当前已知信息」不含真相指针，保留它是为了让 Reviewer 能检查"角色说出/做出超出其已知范围的事"）
 7. [mystery] clues.md 中状态为"已投放"的线索清单（待投放线索一律剔除）
    [romance] romance_clues.md 中已投放的情感信号清单（待投放一律剔除）
 ```
@@ -357,7 +369,7 @@ Director 构建 Chooser prompt 时，**仅**传入以下内容：
 - **B. 读者视角模拟**：
   [mystery] 此刻最怀疑谁？哪个细节"太重要了"？哪里感到困惑？
   [romance] 此刻对两个主角的关系进展有什么期待和判断？哪个情感信号"太明显"或"太刻意"？哪段对话的克制度合适/过度/不足？
-- **C. 人物声音检查**：逐一核查本章角色对白是否与角色档案（脱敏版）一致
+- **C. 人物声音检查**：逐一核查本章角色对白是否与角色档案（脱敏版）一致（说话方式 + 称谓；言行是否超出「当前已知信息」边界）
 - **D. 问题定级清单**：🔴 必须修改 / 🟡 建议修改 / 🟢 观察记录
 
 ### 5.4 Reviewer 输出格式
@@ -409,8 +421,11 @@ language: {language}
 ## 线索/信号状态
 {{project_dir}/meta/clues.md 或 {project_dir}/meta/romance_clues.md 内容}
 
+## 前情摘要（最近章节，你写作的衔接基准）
+{从 {project_dir}/meta/session_log.md 提取的最近 2 章条目：核心事件、角色变化、故事内时间/地点、信息增量、下章切入点}
+
 ## 本章计划
-{从 {project_dir}/meta/outline.md 提取的本章节点}
+{从 {project_dir}/meta/outline.md 提取的本章节点：本章目标、应投线索、应揭秘密、应拆穿误导、章末钩子}
 
 ## 上帝指令（若有）
 {meta/directives.md 中适用于本章且未完成的指令；无则省略本节}
@@ -507,6 +522,8 @@ language: {language}
 4. 段3额外核验：
    - {project_dir}/drafts/chXX.md 是否存在（重命名是否执行）→ 未执行则 Director 代为重命名
    - <seal_report> 中标记 failed 的 meta 更新 → 由 Director 亲自补写对应文件
+   - 封存内容核验：session_log 新条目是否含「故事内时间/地点」「信息增量」字段；outline 本章「实际执行」是否已回写；缺漏 → Director 补写
+5. 修复任务核验：<fix_report>.applied = yes 且 meta_synced ≠ no（no → Director 亲自补写 meta 对应条目）
 ```
 
 **Chooser / Reviewer 返回后**：
@@ -523,6 +540,7 @@ language: {language}
 
 **严禁提取**：
 - "读者此刻不知道"字段（可能包含真相指针，如"读者不知道凶手已换装"）
+- "信息增量"字段（记录各角色获知的内幕，可能含真相指针）
 - 任何 Writer 写作后记中引用 truth/arc 的推理内容
 
 ### 6.6 审阅过滤与有界修复循环
