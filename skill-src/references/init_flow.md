@@ -229,10 +229,10 @@ C. 救赎与和解
 
 1. **`meta/project_info.md`** - 记录项目名称、类型、4轮选择（含用户原话摘录）、三项基本信息、genre、language
 2. **`meta/style_guide.md`** - 风格宪法（读取 `templates/style_guide_template.md`）
-3. **`meta/truth.md`** - 真相文档（读取 `templates/truth_template.md`）
+3. **`meta/truth.md`** - 真相文档（读取 `templates/truth_template.md`；含「假真相设计」「假设链规划」「揭示方式约束」「过去的露出纪律」。若用户案件描述为"多年前旧案重揭"类，必须落实「过去的露出纪律」——过去以当前证据形态分散浮出，禁止终章"历史故事块"）
 4. **`meta/clues.md`** - 线索地图（读取 `templates/clues_template.md`）
 5. **`meta/characters.md`** - 角色档案（读取 `templates/characters_template.md`，至少包含主角、嫌疑人和1-2个关键配角）
-6. **`meta/outline.md`** - 章节大纲（读取 `templates/outline_template.md`；每章必须包含本章目标、应投线索（CL/RH 编号）、应揭秘密、应拆穿误导、章末钩子，并与 truth.md 的线索投放总表一致）
+6. **`meta/outline.md`** - 章节大纲（读取 `templates/outline_template.md`；每章必须包含本章目标、应投线索（CL/RH 编号）、假设操作（建立/强化/推翻 H-X）、应揭秘密、应拆穿误导、章末钩子，并与 truth.md 的线索投放总表及假设链规划一致）
 7. **`meta/session_log.md`** - 空日志文件，等待第一章完成后填入
 
 ### 步骤3：创建项目目录
