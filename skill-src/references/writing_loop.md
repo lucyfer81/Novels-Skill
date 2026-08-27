@@ -709,7 +709,7 @@ Director（主 Agent 自身）按以下循环执行（输出核验规则见 auto
   ── 段落 3（收拢 + 封存，Writer 只写不审）──
   11. 构建 Writer prompt（第3段模板：收拢本章 + 执行封存协议，不含编辑审阅）
   12. 派发 Writer 子任务
-  13. 【核验】drafts/chXX.md 已重命名（否则 Director 代做）；
+  13. 【核验】drafts/chXX.md 已重命名（否则 Director 代做 mv；并确认 chXX_draft.md 残留已清除）；
       <seal_report> 中 failed 的 meta 更新由 Director 补写
 
   ── 责任编辑审阅（独立 Reviewer，无真相视角）──

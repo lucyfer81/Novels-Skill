@@ -178,7 +178,7 @@ Director 每次调用 Writer 子任务时，必须在 prompt 中内联以下内�
 请收拢本章，以"悬而未决的尾音"结束——不解答，提出下一章的核心问题。
 写完后：
 1. 将正文 append 到 {project_dir}/drafts/ch{NN}_draft.md
-2. 将 {project_dir}/drafts/ch{NN}_draft.md 重命名为 {project_dir}/drafts/ch{NN}.md
+2. 将 {project_dir}/drafts/ch{NN}_draft.md 重命名为 {project_dir}/drafts/ch{NN}.md（mv 移动，原 draft 文件不得保留）
 3. 执行章节封存协议（更新 {project_dir}/meta/ 下 session_log、characters、clues/romance_clues）
 4. 按公共输出协议输出 <prose>、<seal_report>、<postscript>（无需输出编辑审阅和三分选择）
 ```
@@ -521,7 +521,8 @@ language: {language}
 3. 选项公平性核验：三个选项预告字数差距是否超过约 1 倍、某选项是否明显空洞/含糊
    → 可疑时要求 Writer 仅重新输出 <choices>（并提醒选项公平性原则）
 4. 段3额外核验：
-   - {project_dir}/drafts/chXX.md 是否存在（重命名是否执行，用 ls 判断）→ 未执行则 Director 代为重命名
+   - {project_dir}/drafts/chXX.md 是否存在（重命名是否执行，用 ls 判断）→ 未执行则 Director 代为重命名（必须 mv 移动，禁止 cp 复制）
+   - 🔴 残留核验：确认 chXX_draft.md 已消失。若 chXX.md 与 chXX_draft.md 并存（复制而非移动的典型症状）→ 删除残留的 draft 文件（否则 6.7 中断恢复会误判该章未完成，导致重写已封存章节）
    - <seal_report> 中标记 failed 的 meta 更新 → 由 Director 亲自补写对应文件
    - 封存内容核验（定向读）：tail session_log 检查新条目是否含「故事内时间/地点」「信息增量」字段；grep outline 本章「实际执行」是否已回写；缺漏 → Director 补写
 5. 修复任务核验：<fix_report>.applied = yes 且 meta_synced ≠ no（no → Director 亲自补写 meta 对应条目）
@@ -602,6 +603,7 @@ Director 维护 `{project_dir}/meta/auto_state.json` 作为自动写作的唯一
 1. 检查 {project_dir}/drafts/ 下是否存在 chXX_draft.md 残留：
    - 存在且有 1 段 → 从第 XX 章第 2 段续写（不作废、不重写）
    - 存在且有 2 段 → 从第 XX 章第 3 段续写
+   - ⚠️ 但若同章 chXX.md 已存在（封存后复制的残留）→ 该章实际已完成：删除残留 draft，从第 XX+1 章正常续跑，禁止重写
    - 读取 auto_state.json 恢复 chooser_log；若文件缺失/损坏，
      从 session_log 重建（选择轨迹可缺省，仅损失 Chooser 记忆）
 2. 向用户报告恢复点："检测到第 XX 章写到第 X 段，从断点继续。"
