@@ -17,6 +17,8 @@
 
 🔴 只加载当前题材的题材包，严禁将其他题材的任何内容注入子任务上下文。
 
+**注入纪律（防止题材包登记语言污染正文）**：构建 Writer prompt 时，题材包 hooks.md **只注入「write_preflight」与「signal_budget」两节全文**；「seal_check」仅随第 3 段任务指令注入；「review_dims」「full_review」只用于 Reviewer 与全稿审阅。🔴 严禁把 hooks.md 整个文件或题材包其他文件整体注入写作类子任务——封存/审阅用的编号与核对语言一旦进入写作上下文，会被模仿进正文。
+
 ---
 
 ## 一、角色概览与核心约束
@@ -104,7 +106,7 @@ Director 每次调用 Writer 子任务时，必须在 prompt 中内联以下内�
 
 ### 3.3 写作规范（注入 Writer prompt）
 
-以下为通用规范；两处 `{...}` 占位由题材包 hooks.md 提供全文注入：
+以下为通用规范；两处 `{...}` 占位**分别只注入**题材包 hooks.md 的「write_preflight」「signal_budget」两节全文（只取这两节，注入纪律见第〇节）：
 
 ```
 ## 写作规范
@@ -161,7 +163,7 @@ Director 每次调用 Writer 子任务时，必须在 prompt 中内联以下内�
 写完后：
 1. 将正文 append 到 {project_dir}/drafts/ch{NN}_draft.md
 2. 将 {project_dir}/drafts/ch{NN}_draft.md 重命名为 {project_dir}/drafts/ch{NN}.md（mv 移动，原 draft 文件不得保留）
-3. 执行章节封存协议（更新 {project_dir}/meta/ 下 session_log、characters、{signal_doc}；核对按题材包 hooks.md「seal_check」执行）
+3. 执行章节封存协议（更新 {project_dir}/meta/ 下 session_log、characters、{signal_doc}；核对按随本指令注入的题材包 hooks.md「seal_check」一节执行）
 4. 按公共输出协议输出 <prose>、<seal_report>、<postscript>（无需输出编辑审阅和三分选择）
 ```
 
@@ -479,6 +481,7 @@ language: {language}
    - 字数核验（zh: wc -c 近似，1段 ≈ 2700字节 / en: wc -w，1段 ≈ 600词）：
       a. 低于下限（850字/550词）→ 派发补写子任务："仅将本段补写至达标后重新 append，不改动已有内容"
       b. 高于上限（950字/650词）→ 接受（Writer 已确认无可拆分）
+   - 编号泄漏核验（正文纯净性）：`grep -nE '（[A-Z]+[-－]?[0-9]+）'` 检查写入后的文件（全角括号内"大写字母+数字"的登记编号样式）→ 命中 → 派发轻量修复子任务："仅删除正文中的编号/结构术语标注，其余正文一字不动"
    - 段数判定（中断恢复/第0步同样适用）：按字节增长近似（zh 每段约2700字节 / en 每段约600词），或 grep 空行分段计数；不全文读入
 2. 段1/2：<choices> 可解析且含 A/B/C 三项 → 解析失败按第二节轻量重试
 3. 选项公平性核验：三个选项预告字数差距是否超过约 1 倍、某选项是否明显空洞/含糊
