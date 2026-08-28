@@ -2,13 +2,16 @@
 # interactive-novel skill 一键安装/同步脚本
 # 将 skill-src/ 同步到各平台运行时目录（.opencode / .claude / .agents）
 # 安装前自动执行题材耦合检查（lint），失败即中止
-# 用法：bash scripts/install.sh
+# 用法：bash scripts/install.sh [目标项目根目录]
+#   不带参数 → 同步到本仓库根目录；带参数 → 同步到指定项目根目录（如安装到其他写作工作台）
 
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SRC="$SCRIPT_DIR/.."
 ROOT="$(cd "$SRC/.." && pwd)"
+DEST_ROOT="${1:-$ROOT}"
+DEST_ROOT="$(cd "$DEST_ROOT" && pwd)"
 cd "$ROOT"
 
 # 前置：题材耦合检查（共享文件必须题材中立，题材包必须完整）
@@ -23,26 +26,26 @@ TARGETS=(
 )
 
 for t in "${TARGETS[@]}"; do
-  # 清理旧构建产物后整体同步（运行时目录均为 gitignore 的构建产物；
+  # 清理旧构建产物后整体同步（运行时目录均为构建产物；
   # 先删再拷，防止已移除/改名的源文件残留为过期副本）
-  rm -rf "$t"
-  mkdir -p "$t"
-  cp -r "$SRC/." "$t/"
-  echo "✅ 已同步: $t"
+  rm -rf "$DEST_ROOT/$t"
+  mkdir -p "$DEST_ROOT/$t"
+  cp -r "$SRC/." "$DEST_ROOT/$t/"
+  echo "✅ 已同步: $DEST_ROOT/$t"
 done
 
 echo ""
 
 # OpenCode: 检查 task 权限（自动写作模式依赖子任务机制）
-if [ -f .opencode/opencode.json ]; then
-  if ! grep -q '"task"' .opencode/opencode.json; then
-    echo "⚠️  .opencode/opencode.json 未配置 task 权限，自动写作模式（/auto-write）需要子任务机制。"
+if [ -f "$DEST_ROOT/.opencode/opencode.json" ]; then
+  if ! grep -q '"task"' "$DEST_ROOT/.opencode/opencode.json"; then
+    echo "⚠️  $DEST_ROOT/.opencode/opencode.json 未配置 task 权限，自动写作模式（/auto-write）需要子任务机制。"
     echo "    请在 opencode.json 的 permission 对象中添加："
     echo '        "task": "allow"'
   else
-    echo "✅ .opencode/opencode.json 已配置 task 权限"
+    echo "✅ $DEST_ROOT/.opencode/opencode.json 已配置 task 权限"
   fi
 fi
 
 echo ""
-echo "安装完成。重启 opencode / claude / antigravity 会话后生效。"
+echo "安装完成（目标：$DEST_ROOT）。重启 opencode / claude / antigravity 会话后生效。"
