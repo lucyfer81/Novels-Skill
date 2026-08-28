@@ -150,7 +150,7 @@ templates:
 ### 5.4 craft.md
 题材工艺指南（现有 `genre_*.md` 内容原样迁移）：
 - 根本工艺与公平性/克制性原则
-- 风格宪法参数（4 种氛围：叙事特征/语言禁忌/样板句式）
+- 风格宪法参数（氛围预设或正交轴合成：叙事特征/语言禁忌/样板句式）
 - 投放物分类学（mystery：Hard Clue / Red Herring / Atmospheric；romance：ES / DS / AS）
 - 节奏曲线与 `/check_pace` 指令逻辑
 - 角色设计要点
