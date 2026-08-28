@@ -38,7 +38,7 @@ cp -r skill-src/* .opencode/skills/interactive-novel/
 ### Subagent 机制
 
 - Director（主 Agent）通过 OpenCode 内置的 `task` 工具派发子任务，调用时指定 `subagent_type: "general"`，角色定义（Writer/Chooser/Reviewer 身份 prompt）由 Director 写入子任务 prompt。
-- Chooser 与 Reviewer 的 `truth.md` / `relationship_arc.md` 隔离在 Skill 的 Prompt 编排层面实现（Director 不传入 + 主动脱敏角色条目），无需手动配置 Agent 文件权限。
+- Chooser 与 Reviewer 的核心设定文档（`{core_doc}`）隔离在 Skill 的 Prompt 编排层面实现（Director 不传入 + 主动脱敏角色条目），无需手动配置 Agent 文件权限。
 - 注意：OpenCode 会同时发现 `.opencode/`、`.claude/`、`.agents/` 三处目录中的同名 skill。**请只保留一份并保持同步**（install.sh 会同步全部三处），避免多副本内容不一致导致加载到旧版本。
 
 ---
@@ -88,5 +88,6 @@ cp -r skill-src/* .agents/skills/interactive-novel/
 ## 4. 架构设计总结
 
 - **源码唯一性**：所有的业务逻辑、提示词宪法与协议模板均维护在 `skill-src/` 中，运行时目录（`.opencode/`、`.claude/`、`.agents/`）均为构建产物，已加入 .gitignore。修改一律改 `skill-src/`，然后运行 `install.sh` 重新同步。
-- **四角色协议**：Director（编排核验）/ Writer（写正文，持真相）/ Chooser（选走向，无真相+读者记忆）/ Reviewer（每章审阅，无真相）。真实性隔离统一靠 Director 的 prompt 编排保证，跨平台一致。
+- **题材包插件化**：题材差异（人格、初始化问题、工艺、钩子、模板）全部封装在 `references/genres/{genre}/` 题材包中；核心协议题材中立，通过抽象槽位（`{core_doc}` / `{signal_doc}`）与 manifest 引用题材包。接口契约见 `references/genres/_SPEC.md`；`install.sh` 安装前会运行 `scripts/lint_coupling.sh` 拦截核心文件的题材耦合回归。
+- **四角色协议**：Director（编排核验）/ Writer（写正文，持核心设定）/ Chooser（选走向，无真相+读者记忆）/ Reviewer（每章审阅，无真相）。真实性隔离统一靠 Director 的 prompt 编排保证，跨平台一致。
 - **跨平台一致性**：Skill 本身不耦合平台专有 API，只声明角色协议与输入输出规范（XML 标签协议），各平台宿主 Agent 自行映射子任务调用。

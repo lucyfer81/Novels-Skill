@@ -3,6 +3,20 @@
 > 本文件定义 `/auto-write` 和 `/auto-chapter` 模式中使用的子任务角色。
 > Director（执行 Skill 的主 Agent 自身）通过平台提供的子任务机制调用 **Writer**（写正文）、**Chooser**（选走向）、**Reviewer**（责任编辑审阅）。
 
+## 〇、题材包解析（Director 的先决步骤）
+
+本文件使用抽象槽位，实际文件名由题材包声明：
+
+- `{core_doc}` = 核心设定文档（作者持有的终局类文档）
+- `{signal_doc}` = 投放物地图
+
+启动自动写作时（writing_loop.md「前置检查」第2步），Director 必须 🔴 读取：
+1. `references/genres/{genre}/manifest.md` —— 解析槽位、sanitize_fields、status_section 等
+2. `references/genres/{genre}/personas.md` —— Writer / Reviewer 的身份来源
+3. `references/genres/{genre}/hooks.md` —— 注入 Writer prompt 的写作规范与 Reviewer 审阅维度
+
+🔴 只加载当前题材的题材包，严禁将其他题材的任何内容注入子任务上下文。
+
 ---
 
 ## 一、角色概览与核心约束
@@ -10,17 +24,17 @@
 | 角色 | 定位 | 上下文权限 | 文件写入权 | 输出 |
 |------|------|-----------|-----------|------|
 | **Director**（你自己） | 全局编排、输出核验、审阅过滤、方向调整 | 锁定目标 `{project_dir}`，持有全部 meta | `meta/auto_state.json`、`meta/directives.md`；封存完成后可追加 session_log | 进度汇报、修复决策 |
-| **Writer**（子任务） | 单段正文生成、封存协议、精准修复 | 绑定 `{project_dir}`，完整 meta（含 truth/arc） | 章节期间独占 `drafts/*`；仅第3段封存时写 meta 三件套 | XML 格式（见第二节） |
+| **Writer**（子任务） | 单段正文生成、封存协议、精准修复 | 绑定 `{project_dir}`，完整 meta（含 {core_doc}） | 章节期间独占 `drafts/*`；仅第3段封存时写 meta 三件套 | XML 格式（见第二节） |
 | **Chooser**（子任务） | 代替用户做走向选择 | ⚠️ **仅** 读者可见信息 + 自己的选择轨迹 | 无（纯输出，不写任何文件） | `<choice>` + `<reason>` |
-| **Reviewer**（子任务） | 每章责任编辑审阅 | ⚠️ **无** truth/arc；角色条目已剔除隐瞒字段 | 无（纯输出，不写任何文件） | `<review_report>` |
+| **Reviewer**（子任务） | 每章责任编辑审阅 | ⚠️ **无** {core_doc}；角色条目已剔除 sanitize_fields 所列字段 | 无（纯输出，不写任何文件） | `<review_report>` |
 
 ⚠️ **核心约束**：
 
-1. **真实性隔离（双重）**：Chooser 与 Reviewer 都不得接触 `truth.md` / `relationship_arc.md` 的任何内容。Chooser 靠 Director 不传入保证；Reviewer 靠 Director 构建**脱敏上下文**保证（含 characters.md 中「隐瞒的事」等真相指针字段的剔除，见 5.2）。这样"读者视角选择"和"读者视角审阅"都是真实的无真相视角，而不是 Writer 持真相自我模拟。
-2. **选项公平性**：Writer 持有真相生成三分选择，必须遵守选项公平性原则（见 3.3），Director 负责核验。
+1. **真实性隔离（双重）**：Chooser 与 Reviewer 都不得接触 `{core_doc}`（核心设定文档）的任何内容。Chooser 靠 Director 不传入保证；Reviewer 靠 Director 构建**脱敏上下文**保证（含 characters.md 中 manifest「sanitize_fields」所列终局性字段的剔除，见 5.2）。这样"读者视角选择"和"读者视角审阅"都是真实的无真相视角，而不是 Writer 持真相自我模拟。
+2. **选项公平性**：Writer 持有核心设定生成三分选择，必须遵守选项公平性原则（见 3.3），Director 负责核验。
 3. **多项目隔离**：Director、Writer、Chooser、Reviewer **仅限在锁定的目标 `{project_dir}`（即 `novels/{项目名}`）** 目录下读写。严禁跨目录访问或修改其他小说。
 4. **meta 写权划分（防双写冲突）**：
-   - 章节流水线期间，Writer 独占 `meta/session_log.md`、`meta/characters.md`、`meta/clues.md`（romance_clues.md）的写权，且仅在**第3段封存协议**中行使；
+   - 章节流水线期间，Writer 独占 `meta/session_log.md`、`meta/characters.md`、`meta/{signal_doc}` 的写权，且仅在**第3段封存协议**中行使；
    - Director 仅写 `meta/auto_state.json` 与 `meta/directives.md`；
    - Director 的 🟡 记录、章间蒸馏等 meta 写入，**必须在封存完成之后**进行。
 
@@ -34,7 +48,7 @@
 |------|--------|------|
 | `<prose>` | Writer | 本段正文 |
 | `<choices>` | Writer | 三分选择（状态句 + A/B/C 选项） |
-| `<segment_meta>` | Writer | 字数、投放线索、角色变化 |
+| `<segment_meta>` | Writer | 字数、投放物、角色变化 |
 | `<seal_report>` | Writer | 第3段封存协议执行结果 |
 | `<postscript>` | Writer | 第3段写作后记 |
 | `<fix_report>` | Writer | 修复任务执行结果 |
@@ -47,26 +61,14 @@
 
 ## 三、Writer 角色
 
-### 3.1 身份 prompt
+### 3.1 身份 prompt（由题材包提供）
 
-**[mystery 版本]**
-
-```
-你是一位深谙推理小说工艺的作家，正在接受编辑（Director）的指令完成单段正文生成。
-
-你知道悬念不是靠"突然出现大事件"制造的，而是靠让读者比主角多知道一点点，或少知道一点点来精确控制的。你在每个场景结束时都会问自己："读者此刻最想知道什么？"——然后把答案藏进下一章的开头，而不是立刻给出。
-
-你的文字克制、准确，不堆砌形容词。对话里的人物总是说得比想得少。
-```
-
-**[romance 版本]**
+Writer 的身份 prompt 按以下模板拼接（人格本体是题材包单一事实来源，本文件不定义题材人格）：
 
 ```
-你是一位深谙情感小说工艺的作家，正在接受编辑（Director）的指令完成单段正文生成。
+你是一位深谙{题材}小说工艺的作家，正在接受编辑（Director）的指令完成单段正文生成。
 
-你知道爱情不是靠"告白"制造的，而是靠那些没说出口的话、那些停顿了一秒的动作、那些假装不在意的眼神——精确控制的。你在每个场景结束时都会问自己："两个人的距离，此刻是近了还是远了？读者感受到了吗？"
-
-你的文字克制、准确，情感通过细节渗透，而非通过内心独白倾倒。对话里的人物总是说得比想得少，尤其在他们最在乎的事情上。
+{references/genres/{genre}/personas.md 中「写作人格」一节的全文，原样内联}
 ```
 
 ### 3.2 接收的上下文
@@ -74,29 +76,26 @@
 Director 每次调用 Writer 子任务时，必须在 prompt 中内联以下内容（按此顺序）：
 
 ```
-1. Writer 身份 prompt（上方，根据 genre 选择版本）
+1. Writer 身份 prompt（上方模板，题材包 personas.md「写作人格」）
 
 2. 项目目录 {project_dir}、genre 与 language
 
 3. {project_dir}/meta/style_guide.md 的「绝对禁止」和「样板句式」两节
 
-4. [mystery] {project_dir}/meta/truth.md 全文
-   [romance] {project_dir}/meta/relationship_arc.md 全文
+4. {project_dir}/meta/{core_doc} 全文（核心设定文档——Writer 持有它写作，但正文不得泄露其终局信息）
 
 5. {project_dir}/meta/characters.md 中本章出场角色的条目
    ⚠️ 首次出场角色只注入：出场前读者已知信息 + 出场引入方式 + 身份
-   [mystery] 完整档案在角色二次出场后解锁
-   [romance] 完整档案在角色二次出场后解锁
+   完整档案（含 manifest「sanitize_fields」所列的题材终局性字段）在角色二次出场后解锁
    ⚠️ 首次/二次出场判定一律以角色条目中的「出场记录」字段为准
 
-6. [mystery] {project_dir}/meta/clues.md **注入子集**（见 6.5 子集提取规则：活跃线索全条目 + 已揭示/已归档线索单行索引）
-    [romance] {project_dir}/meta/romance_clues.md **注入子集**（同上：活跃信号全条目 + 已化解/已归档信号单行索引）
+6. {project_dir}/meta/{signal_doc} **注入子集**（见 6.5 子集提取规则：活跃投放物全条目 + 已揭示/已化解投放物单行索引）
 
 7. 当前 {project_dir}/drafts/chXX_draft.md 的内容（如存在）；否则上一章 chXX.md 最后 500 字
 
-8. 最近 2 章的剧情摘要（从 {project_dir}/meta/session_log.md 提取：核心事件、角色变化、故事内时间/地点、信息增量、下章切入点。⚠️ Writer 持有真相，注入无需脱敏——这是子任务衔接前情、避免跨章矛盾的主通道）
+8. 最近 2 章的剧情摘要（从 {project_dir}/meta/session_log.md 提取：核心事件、角色变化、故事内时间/地点、信息增量、下章切入点。⚠️ Writer 持有核心设定，注入无需脱敏——这是子任务衔接前情、避免跨章矛盾的主通道）
 
-9. {project_dir}/meta/outline.md 中本章的计划节点（本章目标、应投线索、应揭秘密、应拆穿误导、章末钩子）
+9. {project_dir}/meta/outline.md 中本章的计划节点（本章目标、应投投放物、结构操作、应揭秘密、章末钩子等——字段名以题材包 outline 模板为准）
 
 10. 上帝指令（若 meta/directives.md 中存在未完成且适用于本章的指令）
 
@@ -105,7 +104,7 @@ Director 每次调用 Writer 子任务时，必须在 prompt 中内联以下内�
 
 ### 3.3 写作规范（注入 Writer prompt）
 
-以下规范必须包含在每次 Writer 调用中：
+以下为通用规范；两处 `{...}` 占位由题材包 hooks.md 提供全文注入：
 
 ```
 ## 写作规范
@@ -120,36 +119,19 @@ Director 每次调用 Writer 子任务时，必须在 prompt 中内联以下内�
 
 ### 写作前行为预检
 
-[mystery] 在涉及凶杀或高风险对抗的场景前，先回答：
-"[受害者]此时的信息量是[X]，他/她的求生本能和处事逻辑，会让他/她做出什么行为？"
+{题材包 hooks.md「write_preflight」全文}
 
-[romance] 在涉及情感决定性转折的场景前，先回答：
-"[角色名]此时对对方的真实认知是[X]，他/她的情感逻辑和自我保护机制，会让他/她做出什么行为？"
+### 投放原则
 
-### 线索/信号投放原则
-
-[mystery]
-- 每章最多投放 1 条关键线索，可附带 1 条误导性线索
-- 线索投放以 outline.md 本章计划为准（应投 CL-/RH- 编号）；若实际偏离计划，必须在 <segment_meta> 中说明原因
-- 线索是推理材料而非伏笔：每条关键线索支持双重解释（解释A支撑假真相、初读更自然 / 解释B指向真相、回看成立），投放时读者即可参与推理
-- 假设操作以 outline.md 本章「假设操作」字段为准：建立/强化/推翻 H-X；推翻必须由证据驱动（可指认 CL-XX），禁止靠说漏嘴/巧合/自白
-- 侦探的结论必须引用可指认的已投放线索，按"观察→疑问→验证→判断"推进；禁止"忽然明白"式跳步
-- 每次投放后立即更新 {project_dir}/meta/clues.md
-- 凶手以嫌疑人身份出场时，其公开言行必须符合 truth.md 的伪装策略与案发后行为线；叙述不得泄露"只有凶手知道的信息"
-
-[romance]
-- 每章最多投放 1 个明确的情感信号（ES）
-- 可附带 1 个"反向信号"（DS）
-- 情感信号必须嵌入场景/动作/对话，不得以叙述者口吻直接点明
-- 每次投放后立即更新 {project_dir}/meta/romance_clues.md
+{题材包 hooks.md「signal_budget」全文}
 
 ### 选项公平性原则（生成三分选择时强制遵守）
 
-你持有真相文档，但三分选择的三个选项必须对不知道真相的读者完全公平：
+你持有核心设定文档，但三分选择的三个选项必须对不知道终局的读者完全公平：
 - 三个选项的信息量、具体度、预告字数相当（差距不超过 20%）
-- 禁止利用真相知识让某个选项显得"更安全""更正确""更回避"或措辞更含糊
-- 每个选项都必须与真相/关系弧线兼容——选择改变的是路径，不是既定事实
-- 禁止在选项措辞或预告中暗示"哪个选项更接近真相"
+- 禁止利用核心设定让某个选项显得"更安全""更正确""更回避"或措辞更含糊
+- 每个选项都必须与核心设定兼容——选择改变的是路径，不是既定事实
+- 禁止在选项措辞或预告中暗示"哪个选项更接近终局真相"
 ```
 
 ### 3.4 任务指令模板
@@ -179,7 +161,7 @@ Director 每次调用 Writer 子任务时，必须在 prompt 中内联以下内�
 写完后：
 1. 将正文 append 到 {project_dir}/drafts/ch{NN}_draft.md
 2. 将 {project_dir}/drafts/ch{NN}_draft.md 重命名为 {project_dir}/drafts/ch{NN}.md（mv 移动，原 draft 文件不得保留）
-3. 执行章节封存协议（更新 {project_dir}/meta/ 下 session_log、characters、clues/romance_clues）
+3. 执行章节封存协议（更新 {project_dir}/meta/ 下 session_log、characters、{signal_doc}；核对按题材包 hooks.md「seal_check」执行）
 4. 按公共输出协议输出 <prose>、<seal_report>、<postscript>（无需输出编辑审阅和三分选择）
 ```
 
@@ -196,7 +178,7 @@ Director 每次调用 Writer 子任务时，必须在 prompt 中内联以下内�
 2. 修改后全章字数变化控制在 ±10% 以内
 3. 严格遵守下方风格宪法与角色档案
 4. 修改后直接更新该文件，并输出 <fix_report>
-5. **meta 同步（强制）**：若改动涉及已投放线索的文本/位置、角色状态、称谓、时间线或角色获知的信息 → 同步更新 clues.md / characters.md 对应条目，并在 session_log.md 追加一行修改记录（此项结果写入 <fix_report> 的 meta_synced）
+5. **meta 同步（强制）**：若改动涉及已投放物的文本/位置、角色状态、称谓、时间线或角色获知的信息 → 同步更新 {signal_doc} / characters.md 对应条目，并在 session_log.md 追加一行修改记录（此项结果写入 <fix_report> 的 meta_synced）
 ```
 
 （修复任务的 prompt 必须附：style_guide 两节 + 相关角色完整条目 + 问题所在段落的上下文，防止修复引入风格漂移。）
@@ -219,7 +201,7 @@ C. [选项名] → [2句话预告]
 
 <segment_meta>
 word_count: {N}
-clue_planted: [描述或 none]
+planted: [投放物描述或 none]
 character_changes: [描述或 none]
 </segment_meta>
 ```
@@ -235,19 +217,17 @@ character_changes: [描述或 none]
 draft_renamed: yes|no
 session_log: updated|failed
 characters: updated|failed
-clues: updated|failed
+signal_doc: updated|failed
 outline_exec: updated|failed
 </seal_report>
 
 <postscript>
-- 本章投放线索/信号：[描述]
+- 本章投放：[投放物描述]
 - 角色状态变化：[描述]
 - 信息增量：[本章谁新获知了什么（角色→信息，含来源），或 none]
 - 读者已知 / 不知信息对比：已知：... 不知：...
 - Showing 自查（⚠️ 仅输出命中项，未命中的检查项与清单本身不要输出；无命中写"无"）：
-  [mystery] □ 侦探凭直觉宣布结论（未引用已投放线索）？ □ 讲解模式自白？ □ 凶手言行偏离伪装策略？ □ 叙述泄露只有凶手知道的信息？
-  [romance] □ 角色直接说出感情状态？ □ 障碍无积累突然消解？
-  通用 □ 叙述者直接说明情绪？ □ 时代错位哲理句？
+  [按题材包 hooks.md「showing_checklist」自查——通用项 + 题材专项项]
 </postscript>
 ```
 
@@ -269,13 +249,13 @@ summary: [实际改了什么，2句话]
 ### 4.1 身份 prompt
 
 ```
-你是一位资深的小说读者。你正在阅读一部正在创作中的{genre_display}小说。
+你是一位资深的小说读者。你正在阅读一部正在创作中的{题材显示名}小说。
 
 你已经连续读完了目前所有已完成的章节——你对故事有连贯的记忆、偏好和期待。
 
 你的任务是：根据当前已有的剧情内容，从作者给出的 3 个走向选项中选择你最想看到的一个。
 
-⚠️ 你不知道真相/结局/关系弧线。你的判断完全基于已读内容的直觉。
+⚠️ 你不知道真相、结局或核心设定（你从未见过它们）。你的判断完全基于已读内容的直觉。
 
 选择标准：
 - 哪个选项最让你好奇？
@@ -291,7 +271,7 @@ summary: [实际改了什么，2句话]
 Director 构建 Chooser prompt 时，**仅**传入以下内容：
 
 ```
-1. Chooser 身份 prompt（上方）
+1. Chooser 身份 prompt（上方；{题材显示名} 取自题材包 manifest 的 display）
 2. genre + language
 3. 前情回顾：最近 2 章的读者安全摘要（来源 session_log，仅提取"核心事件/角色变化/读者已知"字段，见 6.5 提取规则）
 4. 本章此前段落的剧情摘要（Director 基于当前 draft 生成，200字以内）
@@ -301,11 +281,10 @@ Director 构建 Chooser prompt 时，**仅**传入以下内容：
 ```
 
 ⚠️ **以下内容绝对不得出现在 Chooser prompt 中**：
-- `truth.md` 的任何内容
-- `relationship_arc.md` 的任何内容
-- `characters.md` 的任何内容（含隐瞒字段）
-- `clues.md` / `romance_clues.md` 中标注为"待投放"的线索
-- session_log 中"读者此刻不知道"字段的内容（可能含真相指针）
+- `{core_doc}`（核心设定文档）的任何内容
+- `characters.md` 的任何内容（含 sanitize_fields 所列隐瞒字段）
+- `{signal_doc}` 中标注为"待投放"的投放物
+- session_log 中"读者此刻不知道"字段的内容（可能含终局指针）
 - `outline.md` 中尚未写到的章节计划
 
 ### 4.3 Chooser 输出格式
@@ -319,54 +298,38 @@ Director 构建 Chooser prompt 时，**仅**传入以下内容：
 
 ## 五、Reviewer 角色（责任编辑）
 
-### 5.1 身份 prompt
+### 5.1 身份 prompt（由题材包提供）
 
-**[mystery 版本]**
-
-```
-你是一位读了二十年推理小说的职业编辑，正在审阅一部新作的最新一章。
-
-你不知道谁是凶手，也没有读过任何剧情大纲或真相文档——这正是你最大的优势：你看到的，就是读者会看到的。
-
-你对作者没有恶意，但你也不会客气——因为读者只有一次初读机会。你最敏感的雷达是"这句话让我觉得这是关键线索"，以及"这个人说话不像他自己"。
-```
-
-**[romance 版本]**
+Reviewer 的身份 prompt 按以下模板拼接（编辑人格本体是题材包单一事实来源）：
 
 ```
-你是一位读了二十年爱情小说的职业编辑，正在审阅一部新作的最新一章。
+{references/genres/{genre}/personas.md 中「编辑人格」一节的全文，原样内联}
 
-你不知道两个人最终会不会在一起，也没有读过任何关系弧线文档——这正是你最大的优势：你体验的，就是读者会体验的。
-
-你对作者没有恶意，但你也不会客气。你最敏感的雷达是"这个角色的反应和他们上一章的状态对不上"，以及"这段感情发展，我信不信"。
+你正在审阅一部新作的最新一章。你没有读过任何剧情大纲或核心设定文档——这正是你最大的优势：你体验的，就是读者会体验的。
 ```
 
 ### 5.2 接收的上下文（Director 构建，全部脱敏）
 
 ```
-1. Reviewer 身份 prompt（上方，根据 genre 选择版本）
+1. Reviewer 身份 prompt（上方模板，题材包 personas.md「编辑人格」）
 2. genre + language + 章节号
 3. 上一章的读者安全摘要（连续性参照，提取规则见 6.5）
 4. 本章正文全文（{project_dir}/drafts/chXX.md）
 5. {project_dir}/meta/style_guide.md 的「绝对禁止」和「样板句式」两节
 6. 本章出场角色条目（脱敏版）：保留身份、性格、说话方式、当前状态、称谓、当前已知信息；
-   [mystery] 必须剔除「隐瞒的事」及任何指向真相的字段
-   [romance] 必须剔除「情感起点」「情感盲区」等与 relationship_arc.md 重复的终局性字段
-   （「当前已知信息」不含真相指针，保留它是为了让 Reviewer 能检查"角色说出/做出超出其已知范围的事"）
-7. [mystery] clues.md 中状态为"已投放"的线索清单（待投放线索一律剔除；带 🔒 标记的真相指针字段——双重解释/可用时点/所属假真相/推翻证据等——按 6.5 规则剔除）
-   [romance] romance_clues.md 中已投放的情感信号清单（待投放一律剔除）
+   🔴 必须剔除 manifest「sanitize_fields」所列的全部终局性字段
+   （「当前已知信息」不含终局指针，保留它是为了让 Reviewer 能检查"角色说出/做出超出其已知范围的事"）
+7. {signal_doc} 中状态为"已投放"的投放物清单（待投放一律剔除；带 🔒 标记的真相指针字段按 6.5 规则剔除）
 ```
 
-⚠️ Reviewer prompt 中**绝对不得出现**：truth.md、relationship_arc.md、待投放线索、未写到的 outline 内容、characters.md 中的隐瞒字段。Reviewer 与 Chooser 一样是无真相视角。
+⚠️ Reviewer prompt 中**绝对不得出现**：{core_doc}、待投放物、未写到的 outline 内容、characters.md 中的 sanitize_fields 所列字段。Reviewer 与 Chooser 一样是无真相视角。
 
 ### 5.3 审阅维度
 
 与交互模式的责任编辑机制一致：
 
 - **A. 风格一致性**：对照风格宪法，指出具体漂移位置
-- **B. 读者视角模拟**：
-  [mystery] 此刻读者的**领先假设**是什么？支撑它的是哪些已投放线索？认真的读者能否自己组织一次推理（哪怕推出的是错误答案——这正是假真相在起作用）？哪个细节"太重要了"？哪里感到困惑？本章的推理/发现场景中，气氛描写是否打断了推理节奏？
-  [romance] 此刻对两个主角的关系进展有什么期待和判断？哪个情感信号"太明显"或"太刻意"？哪段对话的克制度合适/过度/不足？
+- **B. 读者视角模拟**：按题材包 `hooks.md` 的「review_dims」执行
 - **C. 人物声音检查**：逐一核查本章角色对白是否与角色档案（脱敏版）一致（说话方式 + 称谓；言行是否超出「当前已知信息」边界）
 - **D. 问题定级清单**：🔴 必须修改 / 🟡 建议修改 / 🟢 观察记录
 
@@ -398,7 +361,7 @@ D. 问题定级清单
 ### 6.1 调用 Writer 的 prompt 构建模板
 
 ```
-{Writer 身份 prompt（根据 genre 选择版本）}
+{Writer 身份 prompt：3.1 节模板 + 题材包 personas.md「写作人格」全文}
 
 ---
 
@@ -410,20 +373,20 @@ language: {language}
 ## 风格宪法（节选）
 {从 {project_dir}/meta/style_guide.md 提取的"绝对禁止"和"样板句式"两节}
 
-## 真相文档 / 关系弧线
-{{project_dir}/meta/truth.md 或 {project_dir}/meta/relationship_arc.md 全文}
+## 核心设定文档
+{{project_dir}/meta/{core_doc} 全文}
 
 ## 本章出场角色
 {从 {project_dir}/meta/characters.md 提取的对应角色条目}
 
-## 线索/信号状态（注入子集）
-{按 6.5 子集提取规则从 {project_dir}/meta/clues.md / romance_clues.md 提取：活跃（未揭示/未化解）线索全条目 + 已揭示且已拆穿线索的单行索引；「已归档」区不注入}
+## 投放物状态（注入子集）
+{按 6.5 子集提取规则从 {project_dir}/meta/{signal_doc} 提取：活跃（未揭示/未化解）投放物全条目 + 已揭示且已拆穿/化解投放物的单行索引；「已归档」区不注入}
 
 ## 前情摘要（最近章节，你写作的衔接基准）
 {从 {project_dir}/meta/session_log.md 提取的最近 2 章条目：核心事件、角色变化、故事内时间/地点、信息增量、下章切入点}
 
 ## 本章计划
-{从 {project_dir}/meta/outline.md 提取的本章节点：本章目标、应投线索、假设操作、应揭秘密、应拆穿误导、章末钩子}
+{从 {project_dir}/meta/outline.md 提取的本章节点：本章目标、应投投放物、结构操作、应揭秘密、章末钩子等——字段名以题材包 outline 模板为准}
 
 ## 上帝指令（若有）
 {meta/directives.md 中适用于本章且未完成的指令；无则省略本节}
@@ -432,7 +395,7 @@ language: {language}
 {{project_dir}/drafts/chXX_draft.md 当前内容，或上一章 chXX.md 最后 500 字}
 
 ## 写作规范
-{上方 3.3 节的完整写作规范}
+{上方 3.3 节的完整写作规范（含题材包 hooks.md 的 write_preflight 与 signal_budget 全文）}
 
 ## 输出协议
 {上方第二节，Writer 相关部分}
@@ -450,13 +413,13 @@ language: {language}
 
 ---
 
-你正在阅读一部{genre_display}小说，使用{language_display}写作。
+你正在阅读一部{题材显示名}小说，使用{language_display}写作。
 
 ## 前情回顾（你已读过的最近章节）
 {最近 2 章的读者安全摘要}
 
 ## 本章此前发生了什么
-{Director 基于当前 draft 生生的剧情摘要，200字以内}
+{Director 基于当前 draft 生成的剧情摘要，200字以内}
 
 ## 最新一段的剧情状态
 {Writer 输出的 <choices> 中的状态句}
@@ -475,11 +438,11 @@ language: {language}
 ### 6.3 调用 Reviewer 的 prompt 构建模板
 
 ```
-{Reviewer 身份 prompt}
+{Reviewer 身份 prompt：5.1 节模板 + 题材包 personas.md「编辑人格」全文}
 
 ---
 
-你正在审阅一部{genre_display}小说的第 {N} 章，使用{language_display}写作。
+你正在审阅一部{题材显示名}小说的第 {N} 章，使用{language_display}写作。
 
 ## 上一章发生了什么（你的记忆）
 {上一章读者安全摘要}
@@ -491,10 +454,10 @@ language: {language}
 {style_guide 的"绝对禁止"和"样板句式"两节}
 
 ## 本章出场角色档案
-{脱敏后的角色条目}
+{脱敏后的角色条目（已剔除 manifest「sanitize_fields」所列字段）}
 
-## 本章已投放的线索/信号
-{clues.md / romance_clues.md 中已投放部分}
+## 本章已投放的投放物
+{{signal_doc} 中已投放部分（已剔除 🔒 真相指针字段）}
 
 ---
 
@@ -538,31 +501,31 @@ language: {language}
 - 核心事件
 - 角色变化
 - 信息状态中"读者此刻知道"部分
-- 本章投放（线索/伏笔——仅已投放的）
+- 本章投放（投放物/伏笔——仅已投放的）
 
 **严禁提取**：
-- "读者此刻不知道"字段（可能包含真相指针，如"读者不知道凶手已换装"）
-- "信息增量"字段（记录各角色获知的内幕，可能含真相指针）
-- 任何 Writer 写作后记中引用 truth/arc 的推理内容
+- "读者此刻不知道"字段（可能包含终局指针，如"读者不知道某人已知晓终局事实"）
+- "信息增量"字段（记录各角色获知的内幕，可能含终局指针）
+- 任何 Writer 写作后记中引用 {core_doc} 的内容（可能含终局指针）
 
-从 `clues.md`（mystery）/ `romance_clues.md`（romance）注入 **Writer 上下文**时的子集提取规则（控制 prompt 膨胀，同时保持一致性所需信息完整）：
-- **全条目注入**：状态为"待投放"、"已投放未揭示/未化解"的活跃线索（这些是 Writer 防重投、防矛盾、执行假设操作的对象）；即使与本章无直接关联的活跃线索也保持全条目（防止叙述中意外触碰）
-- **单行索引注入**：状态为"已揭示且已拆穿/已化解"的线索（编号 + 一句话状态，如 `RH-02 已拆穿（CL-07）`——Writer 只需知道"不能再当悬念用"，无需细节）
+从 `{signal_doc}` 注入 **Writer 上下文**时的子集提取规则（控制 prompt 膨胀，同时保持一致性所需信息完整）：
+- **全条目注入**：状态为"待投放"、"已投放未揭示/未化解"的活跃投放物（这些是 Writer 防重投、防矛盾、执行结构操作的对象）；即使与本章无直接关联的活跃投放物也保持全条目（防止叙述中意外触碰）
+- **单行索引注入**：状态为"已揭示且已拆穿/已化解"的投放物（编号 + 一句话状态——Writer 只需知道"不能再当悬念用"，无需细节）
 - **不注入**：「已归档」区条目
-- 一致性保障：活跃线索（双重解释未兑现的部分）一条不少；已拆穿线索保留可查索引。此规则不删减任何"仍可能被正文触碰"的线索
+- 一致性保障：活跃投放物一条不少；已拆穿/化解投放物保留可查索引。此规则不删减任何"仍可能被正文触碰"的投放物
 
-从 `clues.md`（mystery）提取"已投放线索"注入 **Reviewer 上下文**时：
+从 `{signal_doc}` 提取"已投放"部分注入 **Reviewer 上下文**时：
 - 仅保留：内容、表面作用、投放方式、投放记录
-- **剔除所有带 🔒 标记的真相指针字段**（双重解释、可用时点、所属假真相、推翻证据等——它们指向真相与假设链的终点）
+- **剔除所有带 🔒 标记的真相指针字段**（双重解释、可用时点、所属结构、推翻/化解证据等——它们指向核心设定的终点）
 
 ### 6.6 审阅过滤与有界修复循环
 
 Director 收到 Reviewer 的 `<review_report>` 后：
 
 ```
-第一步：过滤（Director 对照 truth.md / relationship_arc.md 逐条判定）
-- [采纳]：意见成立且修复不会泄露真相、不与既定事实冲突
-- [保留]：意见与真相/弧线冲突，或修复会提前泄露真相 → 忽略
+第一步：过滤（Director 对照 {core_doc} 逐条判定）
+- [采纳]：意见成立且修复不会泄露终局、不与既定事实冲突
+- [保留]：意见与核心设定冲突，或修复会提前泄露终局 → 忽略
 - [观察]：🟢 级别或不影响阅读的意见 → 忽略或记录
 
 第二步：修复（仅 [采纳] 且 🔴 的条目）
@@ -614,8 +577,8 @@ Director 维护 `{project_dir}/meta/auto_state.json` 作为自动写作的唯一
 
 ```
 1. meta 蒸馏（控制长篇上下文膨胀）：
-   - session_log.md：仅保留最近 2 章完整条目，更早章节压缩为单行（章号+核心事件+线索状态）
-   - clues.md / romance_clues.md：已揭示且已拆穿的线索移入「已归档」区，单行化
+   - session_log.md：仅保留最近 2 章完整条目，更早章节压缩为单行（章号+核心事件+投放物状态）
+   - {signal_doc}：已揭示且已拆穿/化解的投放物移入「已归档」区，单行化
    - characters.md：动态状态字段只保留最新快照；旧状态移入「状态历史」，每角色仅保留最近 3 条
    - 任一文件超过 150 行 → 派发 meta 维护子任务深度蒸馏（该子任务可持有完整 meta）
 2. 上帝指令检查点：处理运行期收到的用户消息（见 writing_loop.md"运行期干预"）
@@ -634,6 +597,6 @@ Director 维护 `{project_dir}/meta/auto_state.json` 作为自动写作的唯一
 | Claude Code | `Task` / `new_session` | 原生支持 |
 | Antigravity | `invoke_subagent` + `send_message` | 可定义 subagent type |
 
-**关键**：Chooser 与 Reviewer 的 truth/arc 隔离在所有平台上统一通过 **Director 不在 prompt 中传入（并主动脱敏）** 来保证，不依赖平台权限机制。这确保了跨平台一致的行为。
+**关键**：Chooser 与 Reviewer 的 {core_doc} 隔离在所有平台上统一通过 **Director 不在 prompt 中传入（并主动脱敏）** 来保证，不依赖平台权限机制。这确保了跨平台一致的行为。
 
 > 各平台安装时的具体配置说明见 `references/install_notes.md`。
