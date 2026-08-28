@@ -1,6 +1,6 @@
 ---
 name: interactive-novel
-description: 交互式与自主长篇小说创作工具。支持推理悬疑、爱情等多种题材（题材包可扩展），支持中英文写作。当用户提到写小说、创作故事、生成章节、构建人物、提到推理/悬疑/言情，或输入 /auto-write、/auto-write new、/auto-chapter、/auto-pause、/write、/plan、/status、/check_pace、/review、/finish 等指令时，必须激活此 Skill。用户说"我想写小说"、"帮我创作故事"、"自动写小说"、"I want to write a novel"时必须使用。
+description: 交互式与自主长篇小说创作工具。支持推理悬疑、爱情等多种题材（题材包可扩展），支持中英文写作。当用户提到写小说、创作故事、生成章节、构建人物、提到推理/悬疑/言情，或输入 /auto-write、/auto-write new、/auto-chapter、/auto-pause、/write、/plan、/status、/check_pace、/review、/solver、/finish 等指令时，必须激活此 Skill。用户说"我想写小说"、"帮我创作故事"、"自动写小说"、"I want to write a novel"时必须使用。
 ---
 
 # 交互式长篇小说共创 Skill
@@ -27,6 +27,7 @@ description: 交互式与自主长篇小说创作工具。支持推理悬疑、�
 5. ⚠️ **多 Agent 并发与目录隔离红线**：
    - 锁定目标项目 `{project_dir}` 后，**所有读写操作严格限定在 `{project_dir}/` 内部**（`{project_dir}/meta/`、`{project_dir}/drafts/`）。
    - **绝对严禁**扫描、读取或修改 `novels/` 下其他未锁定的兄弟小说目录，防止与正在并发运行的其他 Agent 产生文件与状态冲突！
+   - 唯一例外：`novels/_ledger.md`（跨项目创作账本，机制见 `references/init_flow.md`）——初始化时允许读取并**在文件末尾追加本项目一行**；除此之外不得以任何方式访问该文件，严禁改写或删除其他项目的行。
 
 ---
 
@@ -63,7 +64,7 @@ description: 交互式与自主长篇小说创作工具。支持推理悬疑、�
 用户说"继续我的小说"、"写下一章"等 → 锁定 `{project_dir}`，读取 `{project_dir}/meta/project_info.md` 确认项目状态与 genre/language，按「题材包协议」解析 manifest，然后按用户指令进入对应流程。
 
 ### 场景C：具体写作指令
-用户输入 `/write`、`/plan`、`/status`、`/check_pace`、`/clue`、`/edit`、`/recap`、`/finish`、`/review` 等 → 🔴 **先完整读取 `references/writing_loop.md`**（指令行为、上下文注入规则、章节封存协议、责任编辑机制、全稿审阅的唯一权威定义），再执行。
+用户输入 `/write`、`/plan`、`/status`、`/check_pace`、`/clue`、`/edit`、`/recap`、`/finish`、`/review`、`/solver` 等 → 🔴 **先完整读取 `references/writing_loop.md`**（指令行为、上下文注入规则、章节封存协议、责任编辑机制、全稿审阅的唯一权威定义），再执行。
 
 ### 场景D：自动写作
 用户使用 `/auto-write [项目名|new]` / `/auto-chapter [项目名|new]` / `/auto-pause`，或说"自动写完" → 🔴 **先完整读取 `references/auto_agents.md` 与 `references/writing_loop.md`**（前者定义 Director/Writer/Chooser/Reviewer 四角色协议，后者定义指令行为与全稿审阅），再执行。
@@ -72,10 +73,11 @@ description: 交互式与自主长篇小说创作工具。支持推理悬疑、�
 
 ## 初始化流程（摘要）
 
-初始化分为**"前置选择 + 4轮对话 + 基本信息收集"**（脚本与契约见 `references/init_flow.md`；题材问题脚本与文件生成清单见 `references/genres/{genre}/init.md`）：
+初始化分为**"前置选择 + 题材共创对话 + 基本信息收集"**（脚本与契约见 `references/init_flow.md`；题材问题脚本与文件生成清单见 `references/genres/{genre}/init.md`）：
 
 - 前置选择：题材（选项由 `references/genres/_registry.md` 生成）+ 语言（zh/en）
-- 题材共创4轮：问题脚本逐字取自题材包 init.md（每轮格式固定：引导语 1-2 句 + A/B/C 选项各附 2-3 句预告 + "也可以告诉我你有完全不同的想法"）
+- 题材共创对话：轮数与问题脚本由题材包 init.md 定义（每轮格式固定：引导语 1-2 句 + 若干选项各附 2-3 句预告 + "也可以告诉我你有完全不同的想法"）
+- 跨项目查重：生成文件前对照 `novels/_ledger.md` 账本，发现同题材核心骨架碰撞须先与用户确认差异化方向
 - 🔴 交互停止契约：每轮输出后立即停止，等待用户真实回复；严禁自问自答（详见 init_flow.md 开头）
 - 基本信息收集（书名/主角/题材起点问题）完成后，按题材包 init.md 的文件生成清单生成项目文件，所有项目创建在 `novels/{项目名}/` 下
 
@@ -96,6 +98,7 @@ description: 交互式与自主长篇小说创作工具。支持推理悬疑、�
 | `/recap [N]` | 生成最近N章的摘要（默认3章） |
 | `/finish [项目名]` | 合并全书为完整小说文件，并自动触发两轮全稿审阅 |
 | `/review [项目名]` | 手动触发两轮全稿审阅（一致性核查 + 文学编辑评审） |
+| `/solver [项目名]` | 挑战读者测试：以无终局视角实测"读者此刻会得出什么结论"，对照核心设定文档判定误导结构是否生效（自动模式在关键章间自动执行） |
 | `/auto-write [项目名\|new]` | 自动完成从当前进度到全书终章：Writer/Chooser/Reviewer 子任务协作，Director 编排核验、过滤意见、有界修复；支持中断恢复与运行期上帝指令；完成后自动 /finish + 审阅 |
 | `/auto-chapter [项目名\|new]` | 相同机制，仅自动完成当前一章后暂停 |
 | `/auto-pause [项目名]` | 请求暂停：当前章流水线完整走完后停止，输出结算看板与恢复方式 |
@@ -111,7 +114,7 @@ novels/
 └── {项目名}/
     ├── meta/
     │   ├── project_info.md      # 类型、风格关键词、初始化选择记录
-    │   ├── style_guide.md       # 风格宪法（由4轮选择生成，模板取自题材包）
+    │   ├── style_guide.md       # 风格宪法（由各轮选择生成，模板取自题材包）
     │   ├── outline.md           # 宽松大纲（章节规划，模板取自题材包）
     │   ├── characters.md        # 角色档案（含动态状态字段）
     │   ├── {core_doc}           # 核心设定文档（终局事实/行为线，作者专属）

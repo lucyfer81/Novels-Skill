@@ -1,7 +1,7 @@
 # 自动写作模式：角色定义与通信协议
 
 > 本文件定义 `/auto-write` 和 `/auto-chapter` 模式中使用的子任务角色。
-> Director（执行 Skill 的主 Agent 自身）通过平台提供的子任务机制调用 **Writer**（写正文）、**Chooser**（选走向）、**Reviewer**（责任编辑审阅）。
+> Director（执行 Skill 的主 Agent 自身）通过平台提供的子任务机制调用 **Writer**（写正文）、**Chooser**（选走向）、**Reviewer**（责任编辑审阅）、**Solver**（按需：挑战读者测试）。
 
 ## 〇、题材包解析（Director 的先决步骤）
 
@@ -29,10 +29,11 @@
 | **Writer**（子任务） | 单段正文生成、封存协议、精准修复 | 绑定 `{project_dir}`，完整 meta（含 {core_doc}） | 章节期间独占 `drafts/*`；仅第3段封存时写 meta 三件套 | XML 格式（见第二节） |
 | **Chooser**（子任务） | 代替用户做走向选择 | ⚠️ **仅** 读者可见信息 + 自己的选择轨迹 | 无（纯输出，不写任何文件） | `<choice>` + `<reason>` |
 | **Reviewer**（子任务） | 每章责任编辑审阅 | ⚠️ **无** {core_doc}；角色条目已剔除 sanitize_fields 所列字段 | 无（纯输出，不写任何文件） | `<review_report>` |
+| **Solver**（子任务，按需） | 挑战读者测试：实测无终局视角的读者当前推论 | ⚠️ 与 Chooser 同级隔离（读者可见语料摘要版，见 4.4） | 无（纯输出，不写任何文件） | `<solver_report>` |
 
 ⚠️ **核心约束**：
 
-1. **真实性隔离（双重）**：Chooser 与 Reviewer 都不得接触 `{core_doc}`（核心设定文档）的任何内容。Chooser 靠 Director 不传入保证；Reviewer 靠 Director 构建**脱敏上下文**保证（含 characters.md 中 manifest「sanitize_fields」所列终局性字段的剔除，见 5.2）。这样"读者视角选择"和"读者视角审阅"都是真实的无真相视角，而不是 Writer 持真相自我模拟。
+1. **真实性隔离（三重）**：Chooser、Reviewer 与 Solver 都不得接触 `{core_doc}`（核心设定文档）的任何内容。Chooser 靠 Director 不传入保证；Reviewer 靠 Director 构建**脱敏上下文**保证（含 characters.md 中 manifest「sanitize_fields」所列终局性字段的剔除，见 5.2）；Solver 靠 Director 只注入读者可见语料摘要保证（见 4.4）。这样"读者视角选择""读者视角审阅"与"读者视角实测推论"都是真实的无真相视角，而不是 Writer 持真相自我模拟。
 2. **选项公平性**：Writer 持有核心设定生成三分选择，必须遵守选项公平性原则（见 3.3），Director 负责核验。
 3. **多项目隔离**：Director、Writer、Chooser、Reviewer **仅限在锁定的目标 `{project_dir}`（即 `novels/{项目名}`）** 目录下读写。严禁跨目录访问或修改其他小说。
 4. **meta 写权划分（防双写冲突）**：
@@ -56,6 +57,7 @@
 | `<fix_report>` | Writer | 修复任务执行结果 |
 | `<choice>` / `<reason>` | Chooser | 走向选择 / 理由 |
 | `<review_report>` | Reviewer | 编辑审阅报告（A-D 维度 + 定级清单） |
+| `<solver_report>` | Solver | 挑战读者测试报告（领先推论 / 支撑投放物 / 信心度 / 困惑点） |
 
 **解析失败处理**：若关键标签缺失或为空，Director 不重跑整个子任务，而是派发一个**轻量重试**子任务："请仅重新输出 `<标签>` 部分，不要重写正文"。同一子任务轻量重试最多 1 次，仍失败按第六节异常降级处理。
 
@@ -296,6 +298,56 @@ Director 构建 Chooser prompt 时，**仅**传入以下内容：
 <reason>[1-2句话，从读者角度]</reason>
 ```
 
+### 4.4 Solver 变体（挑战读者测试，Director 按需派发）
+
+Solver 与 Chooser 共享"读者立场 + 无真相视角"，但任务不同：Chooser 做选择，Solver **报告自己此刻的推论**——用于实测误导结构与投放物在读者端是否生效。
+
+**身份 prompt**：
+
+```
+你是一位认真的长篇小说读者，刚刚一口气读完了这部作品目前已完成的全部章节。
+你不知道任何作者设定的结局或核心设定——你只是边读边想。
+现在作者问你：仅凭你已经读到的内容，你目前对"这一切的解释"得出了什么结论？
+
+要求：
+- 给出你的领先推论（可以多个，按可能性排序）
+- 每条推论标注支撑它的具体细节/投放物（能想起来的都列上）
+- 给出你的信心度（百分比）
+- 说出最让你困惑、觉得解释不通的一点
+
+像一位会在书页边写批注的读者一样作答。不要客气，也不要故作聪明。
+```
+
+**接收的上下文（Director 构建，摘要版——控制 token，不注入章节全文）**：
+
+```
+1. Solver 身份 prompt（上方）
+2. genre + language + 已完成章节数
+3. 前情索引：session_log 蒸馏后的各章单行摘要 + 最近 2 章的读者安全摘要（提取规则同 6.5）
+4. {signal_doc} 中状态为"已投放"的投放物（脱敏版：内容 + 表面作用 + 投放记录摘录；
+   🔴 剔除全部 🔒 真相指针字段与"待投放"条目）
+```
+
+⚠️ 与 Chooser 相同的隔离纪律：{core_doc}、待投放物、未写到的 outline 内容、session_log 的"读者此刻不知道"与"信息增量"字段，一律不得出现。
+
+**输出格式**：
+
+```
+<solver_report>
+领先推论：
+1. [推论]（信心 X%）——支撑：[投放物编号/细节]
+2. ...
+最困惑点：[一句话]
+</solver_report>
+```
+
+**Director 判定规则（对照 {core_doc} 的全书结构执行）**：
+
+- 领先推论 = 当前应生效的假象/误导结构 → ✅ 结构生效，无需动作
+- 领先推论 = 终局事实 → ⚠️ 提前泄漏：检查近期投放物指向性是否过强，考虑调整后续投放顺序（更新 outline「章节计划变更记录」并写明原因）
+- 领先推论 = 早已被推翻的旧结构，或无法组织任何推论 → ⚠️ 支撑不足：下章补维持性证据，或让主角做一次梳理
+- 结论以一行【挑战读者测试】条目追加 session_log（封存完成后写入，遵守 meta 写权）
+
 ---
 
 ## 五、Reviewer 角色（责任编辑）
@@ -494,11 +546,12 @@ language: {language}
 5. 修复任务核验：<fix_report>.applied = yes 且 meta_synced ≠ no（no → Director 亲自补写 meta 对应条目）
 ```
 
-**Chooser / Reviewer 返回后**：
+**Chooser / Reviewer / Solver 返回后**：
 - Chooser：`<choice>` 必须是 A/B/C 之一，否则重试 1 次；仍失败 → 默认选 A，记录警告
 - Reviewer：`<review_report>` 存在且 D 节可解析；失败 → 重试 1 次；仍失败 → 本章跳过审阅，进度卡片标记 ⚠️，记录到 session_log，不阻断主流程
+- Solver：`<solver_report>` 存在且含至少一条推论；失败 → 重试 1 次；仍失败 → 跳过本次测试，标记 ⚠️，不阻断主流程
 
-### 6.5 读者安全提取规则（构建 Chooser / Reviewer 上下文时）
+### 6.5 读者安全提取规则（构建 Chooser / Reviewer / Solver 上下文时）
 
 从 `session_log.md` 提取前情时，**只允许**以下字段：
 - 核心事件
@@ -594,12 +647,12 @@ Director 维护 `{project_dir}/meta/auto_state.json` 作为自动写作的唯一
 
 本文件描述的是角色意图和通信协议，不涉及具体平台 API。各平台的宿主 Agent 根据自身能力映射子任务调用：
 
-| 平台 | Writer/Chooser/Reviewer 调用方式 | 备注 |
+| 平台 | Writer/Chooser/Reviewer/Solver 调用方式 | 备注 |
 |------|-------------------------------|------|
 | OpenCode | `task` 工具，`subagent_type: "general"`，角色定义写入 prompt | 需在 opencode.json 开启 `permission.task: "allow"` |
 | Claude Code | `Task` / `new_session` | 原生支持 |
 | Antigravity | `invoke_subagent` + `send_message` | 可定义 subagent type |
 
-**关键**：Chooser 与 Reviewer 的 {core_doc} 隔离在所有平台上统一通过 **Director 不在 prompt 中传入（并主动脱敏）** 来保证，不依赖平台权限机制。这确保了跨平台一致的行为。
+**关键**：Chooser、Reviewer 与 Solver 的 {core_doc} 隔离在所有平台上统一通过 **Director 不在 prompt 中传入（并主动脱敏）** 来保证，不依赖平台权限机制。这确保了跨平台一致的行为。
 
 > 各平台安装时的具体配置说明见 `references/install_notes.md`。
