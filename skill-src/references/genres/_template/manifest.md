@@ -3,6 +3,7 @@
 genre: {genre}
 display: {显示名}
 core_doc: {核心设定文档文件名，如 xxx.md}
+core_skeleton: {core_doc 常驻骨架节的 ## 标题，如 xxx；未声明则 core_doc 全文读取}
 signal_doc: {投放物地图文件名，如 xxx.md}
 signal_term: {投放物单数术语}
 status_section: {/status 题材区块标题}

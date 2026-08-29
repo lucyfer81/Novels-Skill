@@ -19,6 +19,8 @@
 
 **注入纪律（防止题材包登记语言污染正文）**：构建 Writer prompt 时，题材包 hooks.md **只注入「write_preflight」与「signal_budget」两节全文**；「seal_check」仅随第 3 段任务指令注入；「review_dims」「full_review」只用于 Reviewer 与全稿审阅。🔴 严禁把 hooks.md 整个文件或题材包其他文件整体注入写作类子任务——封存/审阅用的编号与核对语言一旦进入写作上下文，会被模仿进正文。
 
+**上下文传输纪律（防主会话与子任务上下文膨胀）**：大文件内容一律不以"Director 全文内联"方式进入子任务 prompt。Director 只内联**小体量且必须由 Director 保证**的内容（身份 prompt、任务指令、写作规范、前情摘要、名单与编号、读取指引）；完整文件内容一律以「路径 + 读取指引」交付子任务用 read 工具自读（平台子任务均具备文件读取能力，见第七节）。Writer 的冷启动注入因此从"全文搬运"降为"{core_doc} 骨架节 + 本章依据分节 + {signal_doc} 总索引 + 指定编号全条目"（分层记忆规则见 3.2 / 6.5）。
+
 ---
 
 ## 一、角色概览与核心约束
@@ -26,7 +28,7 @@
 | 角色 | 定位 | 上下文权限 | 文件写入权 | 输出 |
 |------|------|-----------|-----------|------|
 | **Director**（你自己） | 全局编排、输出核验、审阅过滤、方向调整 | 锁定目标 `{project_dir}`，持有全部 meta | `meta/auto_state.json`、`meta/directives.md`；封存完成后可追加 session_log | 进度汇报、修复决策 |
-| **Writer**（子任务） | 单段正文生成、封存协议、精准修复 | 绑定 `{project_dir}`，完整 meta（含 {core_doc}） | 章节期间独占 `drafts/*`；仅第3段封存时写 meta 三件套 | XML 格式（见第二节） |
+| **Writer**（子任务） | 单段正文生成、封存协议、精准修复 | 绑定 `{project_dir}`，完整 meta（含 {core_doc}，按分层记忆规则自读） | 章节期间独占 `drafts/*`；仅第3段封存时写 meta 封存四件套（session_log / characters / {signal_doc} / continuity） | XML 格式（见第二节） |
 | **Chooser**（子任务） | 代替用户做走向选择 | ⚠️ **仅** 读者可见信息 + 自己的选择轨迹 | 无（纯输出，不写任何文件） | `<choice>` + `<reason>` |
 | **Reviewer**（子任务） | 每章责任编辑审阅 | ⚠️ **无** {core_doc}；角色条目已剔除 sanitize_fields 所列字段 | 无（纯输出，不写任何文件） | `<review_report>` |
 | **Solver**（子任务，命中触发条件即强制） | 挑战读者测试：实测无终局视角的读者当前推论 | ⚠️ 与 Chooser 同级隔离（读者可见语料摘要版，见 4.4） | 无（纯输出，不写任何文件） | `<solver_report>` |
@@ -37,7 +39,7 @@
 2. **选项公平性**：Writer 持有核心设定生成三分选择，必须遵守选项公平性原则（见 3.3），Director 负责核验。
 3. **多项目隔离**：Director、Writer、Chooser、Reviewer **仅限在锁定的目标 `{project_dir}`（即 `novels/{项目名}`）** 目录下读写。严禁跨目录访问或修改其他小说。
 4. **meta 写权划分（防双写冲突）**：
-   - 章节流水线期间，Writer 独占 `meta/session_log.md`、`meta/characters.md`、`meta/{signal_doc}` 的写权，且仅在**第3段封存协议**中行使；
+   - 章节流水线期间，Writer 独占 `meta/session_log.md`、`meta/characters.md`、`meta/{signal_doc}`、`meta/continuity.md` 的写权，且仅在**第3段封存协议**中行使；
    - Director 仅写 `meta/auto_state.json` 与 `meta/directives.md`；
    - Director 的 🟡 记录、章间蒸馏等 meta 写入，**必须在封存完成之后**进行。
 
@@ -77,33 +79,55 @@ Writer 的身份 prompt 按以下模板拼接（人格本体是题材包单一�
 
 ### 3.2 接收的上下文
 
-Director 每次调用 Writer 子任务时，必须在 prompt 中内联以下内容（按此顺序）：
+Director 每次调用 Writer 子任务时，prompt 由**内联部分**（体积小、必须由 Director 保证）与**自读清单**（路径 + 读取指引，Writer 用 read 工具自行读取，禁止跳过）构成。
+
+**内联部分**：
 
 ```
-1. Writer 身份 prompt（上方模板，题材包 personas.md「写作人格」）
+1. Writer 身份 prompt（3.1 节模板 + 题材包 personas.md「写作人格」全文）
 
-2. 项目目录 {project_dir}、genre 与 language
+2. 项目信息：{project_dir}、genre、language
 
-3. {project_dir}/meta/style_guide.md 的「绝对禁止」和「样板句式」两节
+3. 本章出场角色名单与首次出场名单（Director 用 grep 从 characters.md 条目标题与
+   「出场记录」「首次出场章节」字段提取，不全文读）
 
-4. {project_dir}/meta/{core_doc} 全文（核心设定文档——Writer 持有它写作，但正文不得泄露其终局信息）
+4. 本章应投/将触碰的投放物编号（从 outline.md 本章计划节点提取：应投、结构操作引用的证据编号）
 
-5. {project_dir}/meta/characters.md 中本章出场角色的条目
-   ⚠️ 首次出场角色只注入：出场前读者已知信息 + 出场引入方式 + 身份
-   完整档案（含 manifest「sanitize_fields」所列的题材终局性字段）在角色二次出场后解锁
-   ⚠️ 首次/二次出场判定一律以角色条目中的「出场记录」字段为准
+5. {core_doc} 读取指引：骨架节标题（manifest `core_skeleton` 字段）+ 本章依据分节
+   （outline 本章「核心依据」字段）；任一缺省 → 指引为"全文读取"；揭示/终局章一律"全文读取"
 
-6. {project_dir}/meta/{signal_doc} **注入子集**（见 6.5 子集提取规则：活跃投放物全条目 + 已揭示/已化解投放物单行索引）
+6. 前情摘要：最近 2 章 session_log 条目（核心事件、角色变化、故事内时间/地点、信息增量、
+   下章切入点——每章封存后提取一次，章内三段复用，不重复读文件。
+   ⚠️ Writer 持有核心设定，注入无需脱敏——这是子任务衔接前情、避免跨章矛盾的主通道）
 
-7. 当前 {project_dir}/drafts/chXX_draft.md 的内容（如存在）；否则上一章 chXX.md 最后 500 字
+7. 当前草稿状态：draft 路径 + 已有段数（ls / wc 判定，不全文读；正文衔接由 Writer 自读 draft 完成）
 
-8. 最近 2 章的剧情摘要（从 {project_dir}/meta/session_log.md 提取：核心事件、角色变化、故事内时间/地点、信息增量、下章切入点。⚠️ Writer 持有核心设定，注入无需脱敏——这是子任务衔接前情、避免跨章矛盾的主通道）
+8. 上帝指令（若 meta/directives.md 中存在未完成且适用于本章的指令）
 
-9. {project_dir}/meta/outline.md 中本章的计划节点（本章目标、应投投放物、结构操作、应揭秘密、章末钩子等——字段名以题材包 outline 模板为准）
+9. 写作规范（3.3 节，含题材包 hooks.md 两节全文）+ 输出协议（第二节 Writer 部分）+ 任务指令（3.4 节）
+```
 
-10. 上帝指令（若 meta/directives.md 中存在未完成且适用于本章的指令）
+**自读清单**（写入 prompt，Writer 依次读取）：
 
-11. 任务指令（见下方 3.4 节）
+```
+1. {project_dir}/meta/{core_doc} —— 按读取指引（骨架节 + 本章依据分节；指引为"全文读取"时读全文）
+
+2. {project_dir}/meta/characters.md —— 仅本章出场角色条目；首次出场角色只读并遵守：
+   出场前读者已知信息 / 出场引入方式 / 身份（职业/社会角色），完整档案（含 manifest
+   「sanitize_fields」所列题材终局性字段）在该角色二次出场后解锁；
+   首次/二次出场判定一律以角色条目中的「出场记录」字段为准
+
+3. {project_dir}/meta/{signal_doc} —— 「总索引」节全量 + 内联第4项所列编号的全条目；
+   写作中若触及索引内其他活跃投放物，必须先 read 该条目全文再落笔（按需加载）；
+   文件无「总索引」节 → 全文读取
+
+4. {project_dir}/drafts/chXX_draft.md 全文（存在时）；否则上一章 chXX.md 最后 500 字
+
+5. {project_dir}/meta/outline.md 本章小节
+
+6. {project_dir}/meta/style_guide.md 的「绝对禁止」「样板句式」两节
+
+7. {project_dir}/meta/continuity.md（连贯性登记：场景登记 + 事实断言——防场景复写与事实矛盾）
 ```
 
 ### 3.3 写作规范（注入 Writer prompt）
@@ -165,7 +189,7 @@ Director 每次调用 Writer 子任务时，必须在 prompt 中内联以下内�
 写完后：
 1. 将正文 append 到 {project_dir}/drafts/ch{NN}_draft.md
 2. 将 {project_dir}/drafts/ch{NN}_draft.md 重命名为 {project_dir}/drafts/ch{NN}.md（mv 移动，原 draft 文件不得保留）
-3. 执行章节封存协议（更新 {project_dir}/meta/ 下 session_log、characters、{signal_doc}；核对按随本指令注入的题材包 hooks.md「seal_check」一节执行）
+3. 执行章节封存协议（更新 {project_dir}/meta/ 下 session_log、characters、{signal_doc}、continuity；核对按随本指令注入的题材包 hooks.md「seal_check」一节执行）
 4. 按公共输出协议输出 <prose>、<seal_report>、<postscript>（无需输出编辑审阅和三分选择）
 ```
 
@@ -222,6 +246,7 @@ draft_renamed: yes|no
 session_log: updated|failed
 characters: updated|failed
 signal_doc: updated|failed
+continuity: updated|failed|skipped_legacy
 outline_exec: updated|failed
 </seal_report>
 
@@ -414,6 +439,8 @@ D. 问题定级清单
 
 ### 6.1 调用 Writer 的 prompt 构建模板
 
+> 体积纪律：本模板只内联小体量内容；大文件一律走「自读清单」（见第〇节上下文传输纪律）。
+
 ```
 {Writer 身份 prompt：3.1 节模板 + 题材包 personas.md「写作人格」全文}
 
@@ -424,29 +451,22 @@ D. 问题定级清单
 genre: {genre}
 language: {language}
 
-## 风格宪法（节选）
-{从 {project_dir}/meta/style_guide.md 提取的"绝对禁止"和"样板句式"两节}
+## 本章参数
+- 出场角色：{名单}；首次出场：{名单（三字段纪律见自读清单第2项）}
+- 应投/将触碰投放物编号：{编号列表，或"无"}
+- {core_doc} 读取指引：{骨架节标题（manifest core_skeleton）} + {outline 本章「核心依据」字段指向的分节}；任一缺省或本章为揭示/终局章 → "全文读取"
 
-## 核心设定文档
-{{project_dir}/meta/{core_doc} 全文}
+## 前情摘要（你写作的衔接基准）
+{最近 2 章条目：核心事件、角色变化、故事内时间/地点、信息增量、下章切入点}
 
-## 本章出场角色
-{从 {project_dir}/meta/characters.md 提取的对应角色条目}
-
-## 投放物状态（注入子集）
-{按 6.5 子集提取规则从 {project_dir}/meta/{signal_doc} 提取：活跃（未揭示/未化解）投放物全条目 + 已揭示且已拆穿/化解投放物的单行索引；「已归档」区不注入}
-
-## 前情摘要（最近章节，你写作的衔接基准）
-{从 {project_dir}/meta/session_log.md 提取的最近 2 章条目：核心事件、角色变化、故事内时间/地点、信息增量、下章切入点}
-
-## 本章计划
-{从 {project_dir}/meta/outline.md 提取的本章节点：本章目标、应投投放物、结构操作、应揭秘密、章末钩子等——字段名以题材包 outline 模板为准}
+## 当前草稿
+{draft 路径与已有段数（ls/wc 判定）；或"本章第1段——上一章末尾见自读清单第4项"}
 
 ## 上帝指令（若有）
 {meta/directives.md 中适用于本章且未完成的指令；无则省略本节}
 
-## 已有内容
-{{project_dir}/drafts/chXX_draft.md 当前内容，或上一章 chXX.md 最后 500 字}
+## 自读清单（用 read 工具依次完整读取，禁止跳过；正文衔接以自读结果为准）
+{3.2 节自读清单的实例化：各文件路径 + 上方读取指引}
 
 ## 写作规范
 {上方 3.3 节的完整写作规范（含题材包 hooks.md 的 write_preflight 与 signal_budget 全文）}
@@ -473,7 +493,7 @@ language: {language}
 {最近 2 章的读者安全摘要}
 
 ## 本章此前发生了什么
-{Director 基于当前 draft 生成的剧情摘要，200字以内}
+{Director 基于本章此前 Writer 已返回的 <prose> 生成的剧情摘要，200字以内——正文已在 Director 上下文中，🔴 禁止为生成摘要重读 draft 文件}
 
 ## 最新一段的剧情状态
 {Writer 输出的 <choices> 中的状态句}
@@ -543,6 +563,7 @@ language: {language}
    - 🔴 残留核验：确认 chXX_draft.md 已消失。若 chXX.md 与 chXX_draft.md 并存（复制而非移动的典型症状）→ 删除残留的 draft 文件（否则 6.7 中断恢复会误判该章未完成，导致重写已封存章节）
    - <seal_report> 中标记 failed 的 meta 更新 → 由 Director 亲自补写对应文件
    - 封存内容核验（定向读）：tail session_log 检查新条目是否含「故事内时间/地点」「信息增量」字段；grep outline 本章「实际执行」是否已回写；缺漏 → Director 补写
+   - 幂等核验：tail session_log 检查同章摘要条目或逐字相同的【修改记录】是否重复追加（幂等失败）→ 删除多余，仅保留一条
 5. 修复任务核验：<fix_report>.applied = yes 且 meta_synced ≠ no（no → Director 亲自补写 meta 对应条目）
 ```
 
@@ -569,6 +590,14 @@ language: {language}
 - **单行索引注入**：状态为"已揭示且已拆穿/已化解"的投放物（编号 + 一句话状态——Writer 只需知道"不能再当悬念用"，无需细节）
 - **不注入**：「已归档」区条目
 - 一致性保障：活跃投放物一条不少；已拆穿/化解投放物保留可查索引。此规则不删减任何"仍可能被正文触碰"的投放物
+
+从 `{signal_doc}` 为 **Writer** 提供「总索引 + 指定条目 + 按需加载」（控制注入体积，同时保证知晓完整）：
+- **总索引节全量**：每条投放物一行（编号 + 一句话内容 + 状态）——Writer 对全部投放物"知晓存在"，这是防重投、防矛盾、防叙述意外触碰的底线
+- **全条目仅注入**：outline 本章计划标注的编号（应投 / 将触碰 / 结构操作引用的证据编号）
+- **按需加载**：写作中触及索引内其他活跃投放物时，Writer 必须先 read 该条目全文再落笔
+- **不涉及**：「已归档」区条目
+- 兼容：{signal_doc} 无「总索引」节（旧项目）→ Writer 自读全文
+- 一致性保障：知晓靠总索引（一条不少），细节靠按需加载。此规则不删减任何"仍可能被正文触碰"的投放物——只把"全量细节搬运"改为"全量索引 + 按需细节"
 
 从 `{signal_doc}` 提取"已投放"部分注入 **Reviewer 上下文**时：
 - 仅保留：内容、表面作用、投放方式、投放记录
@@ -636,9 +665,11 @@ Director 维护 `{project_dir}/meta/auto_state.json` 作为自动写作的唯一
    - session_log.md：仅保留最近 2 章完整条目，更早章节压缩为单行（章号+核心事件+投放物状态）
    - {signal_doc}：已揭示且已拆穿/化解的投放物移入「已归档」区，单行化
    - characters.md：动态状态字段只保留最新快照；旧状态移入「状态历史」，每角色仅保留最近 3 条
-   - 任一文件超过 150 行 → 派发 meta 维护子任务深度蒸馏（该子任务可持有完整 meta）
-2. 上帝指令检查点：处理运行期收到的用户消息（见 writing_loop.md"运行期干预"）
-3. 更新 auto_state.json，进入下一章
+   - 任一文件超过 150 行或 12KB → 派发 meta 维护子任务深度蒸馏（该子任务可持有完整 meta）
+2. 追加幂等（防重复写入）：向 session_log 追加任何条目或【修改记录】前，先确认同章同内容不存在；
+   修复任务的 meta 同步与封存协议的 meta 更新不得重复追加同一条记录
+3. 上帝指令检查点：处理运行期收到的用户消息（见 writing_loop.md"运行期干预"）
+4. 更新 auto_state.json，进入下一章
 ```
 
 ---

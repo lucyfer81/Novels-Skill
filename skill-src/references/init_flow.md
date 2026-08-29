@@ -114,15 +114,17 @@
 1. **`meta/project_info.md`** - 记录项目名称、类型、各轮选择（含用户原话摘录）、三项基本信息、genre、language
 2. 其余文件（style_guide / core_doc / signal_doc / characters / outline / session_log）- 按清单指定的模板与题材要求生成
 3. **`meta/session_log.md`** - 空日志文件，等待第一章完成后填入
+4. **`meta/continuity.md`** - 连贯性登记空表（核心协议统一要求，题材清单不重复登记；格式见 `references/writing_loop.md`「连贯性登记格式」）
 
 ### 步骤4：创建项目目录并登记账本
 
 在项目根目录的 `novels/` 下创建项目：
 ```
 novels/{项目名}/
-├── meta/        （上述全部文件）
+├── meta/        （上述全部文件，含 continuity.md）
 └── drafts/      （空目录，等待第一章）
 ```
+
 锁定 `{project_dir} = novels/{项目名}`。
 
 随后在 `novels/_ledger.md` 末尾**追加本项目一行**（文件不存在则先创建表头）：

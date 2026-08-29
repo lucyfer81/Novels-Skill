@@ -3,6 +3,7 @@
 genre: mystery
 display: 推理悬疑
 core_doc: truth.md
+core_skeleton: 核心骨架
 signal_doc: clues.md
 signal_term: 线索
 status_section: 线索地图

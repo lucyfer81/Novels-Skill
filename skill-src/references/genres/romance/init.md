@@ -151,10 +151,10 @@ C. 开放（未完成，留白）
 
 1. **`meta/project_info.md`** - 记录各轮选择（第1轮为"关系模式"、第2轮为"背景土壤"（含叠加处境）、第3轮为"情感基调"）、三项基本信息、确认后的叙事视角、genre、language
 2. **`meta/style_guide.md`** - 风格宪法（读取 `templates/romance_style_guide_template.md`；由第2轮背景轴取语言素材、第3轮基调轴取情感纪律正交合成，合成规则见本包 craft.md；叙事视角按本文件「叙事视角：编辑推荐」的确认结果填入并注明理由；模板已内置爱情版的基础定位、叙事规则、对话/描写原则、绝对禁止项、对白情感检查与主角情感盲区字段，直接按各轮选择填充即可）
-3. **`meta/relationship_arc.md`** - 关系弧线（读取 `templates/relationship_arc_template.md`；本题材无"真相文档"，关系弧线即 core_doc；「感情障碍的真相层」以第1轮关系模式自带的阻力配比为基础具体化，配比定义见本包 craft.md）
-4. **`meta/romance_clues.md`** - 情感信号地图（读取 `templates/romance_clues_template.md`）
+3. **`meta/relationship_arc.md`** - 关系弧线（读取 `templates/relationship_arc_template.md`；本题材无"真相文档"，关系弧线即 core_doc；含「关系骨架」常驻事实表——从细案蒸馏，此后同步维护；「感情障碍的真相层」以第1轮关系模式自带的阻力配比为基础具体化，配比定义见本包 craft.md）
+4. **`meta/romance_clues.md`** - 情感信号地图（读取 `templates/romance_clues_template.md`；含「总索引」节——一行一条全量登记，此后每次状态变更同步维护）
 5. **`meta/characters.md`** - 角色档案（读取 `templates/romance_characters_template.md`）
-6. **`meta/outline.md`** - 章节大纲（读取 `templates/outline_template.md`；每章使用爱情版字段：应投信号（ES/DS 编号）、弧线操作、应揭秘密、应化解退缩、章末钩子，并与 relationship_arc.md 的情感信号投放总表及情感时间线一致）
+6. **`meta/outline.md`** - 章节大纲（读取 `templates/outline_template.md`；每章使用爱情版字段：应投信号（ES/DS 编号）、弧线操作、核心依据（本章相关的 relationship_arc.md 细案分节）、应揭秘密、应化解退缩、章末钩子，并与 relationship_arc.md 的情感信号投放总表及情感时间线一致）
 7. **`meta/session_log.md`** - 空日志文件，等待第一章完成后填入
 
 ## outline 章节节奏说明

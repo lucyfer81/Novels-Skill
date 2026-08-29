@@ -3,6 +3,7 @@
 genre: romance
 display: 爱情
 core_doc: relationship_arc.md
+core_skeleton: 关系骨架
 signal_doc: romance_clues.md
 signal_term: 信号
 status_section: 情感信号地图

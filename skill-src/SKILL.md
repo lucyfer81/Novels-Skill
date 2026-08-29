@@ -119,7 +119,8 @@ novels/
     │   ├── characters.md        # 角色档案（含动态状态字段）
     │   ├── {core_doc}           # 核心设定文档（终局事实/行为线，作者专属）
     │   ├── {signal_doc}         # 投放物地图（线索/信号的登记与状态）
-    │   └── session_log.md       # 每章摘要日志（含编辑审阅记录）
+    │   ├── continuity.md       # 连贯性登记（场景登记+事实断言，防复写/防矛盾）
+    │   └── session_log.md      # 每章摘要日志（含编辑审阅记录）
     ├── drafts/
     │   ├── ch01.md
     │   ├── ch02.md
