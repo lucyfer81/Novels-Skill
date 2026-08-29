@@ -29,7 +29,7 @@
 | **Writer**（子任务） | 单段正文生成、封存协议、精准修复 | 绑定 `{project_dir}`，完整 meta（含 {core_doc}） | 章节期间独占 `drafts/*`；仅第3段封存时写 meta 三件套 | XML 格式（见第二节） |
 | **Chooser**（子任务） | 代替用户做走向选择 | ⚠️ **仅** 读者可见信息 + 自己的选择轨迹 | 无（纯输出，不写任何文件） | `<choice>` + `<reason>` |
 | **Reviewer**（子任务） | 每章责任编辑审阅 | ⚠️ **无** {core_doc}；角色条目已剔除 sanitize_fields 所列字段 | 无（纯输出，不写任何文件） | `<review_report>` |
-| **Solver**（子任务，按需） | 挑战读者测试：实测无终局视角的读者当前推论 | ⚠️ 与 Chooser 同级隔离（读者可见语料摘要版，见 4.4） | 无（纯输出，不写任何文件） | `<solver_report>` |
+| **Solver**（子任务，命中触发条件即强制） | 挑战读者测试：实测无终局视角的读者当前推论 | ⚠️ 与 Chooser 同级隔离（读者可见语料摘要版，见 4.4） | 无（纯输出，不写任何文件） | `<solver_report>` |
 
 ⚠️ **核心约束**：
 
@@ -298,7 +298,7 @@ Director 构建 Chooser prompt 时，**仅**传入以下内容：
 <reason>[1-2句话，从读者角度]</reason>
 ```
 
-### 4.4 Solver 变体（挑战读者测试，Director 按需派发）
+### 4.4 Solver 变体（挑战读者测试；触发点命中即必须派发，见 writing_loop.md /auto-write 步骤 19.5）
 
 Solver 与 Chooser 共享"读者立场 + 无真相视角"，但任务不同：Chooser 做选择，Solver **报告自己此刻的推论**——用于实测误导结构与投放物在读者端是否生效。
 
