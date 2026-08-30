@@ -680,9 +680,22 @@ Director 维护 `{project_dir}/meta/auto_state.json` 作为自动写作的唯一
 
 | 平台 | Writer/Chooser/Reviewer/Solver 调用方式 | 备注 |
 |------|-------------------------------|------|
-| OpenCode | `task` 工具，`subagent_type: "general"`，角色定义写入 prompt | 需在 opencode.json 开启 `permission.task: "allow"` |
+| OpenCode | `task` 工具，`subagent_type` 用已部署的 `novel-*` 角色 agents（推荐，见下方"角色档位"）；未部署时回退 `"general"`，角色定义写入 prompt | 需在 opencode.json 开启 `permission.task: "allow"` |
 | Claude Code | `Task` / `new_session` | 原生支持 |
 | Antigravity | `invoke_subagent` + `send_message` | 可定义 subagent type |
+
+**角色档位（可选的平台增强，协议中立）**：支持按子任务绑定模型/思考档位的平台，可按以下档位部署角色变体。**未部署的平台一律用默认模型与通用子任务，协议行为完全不变**：
+
+| 角色 | 档位 | 理由 |
+|------|------|------|
+| Writer（常规章） | 旗舰模型 · 高档思考 | 创作质量最敏感，不可降级 |
+| Writer（深档变体） | 旗舰模型 · 最高档思考 | 用于证据收敛 / 推导揭示 / 对峙终局章——论断须逐步回指已投放细节，逻辑密度最高 |
+| Chooser | 轻量模型 · 低档思考 | 读者直觉模拟，过度思考反而失真；高频调用，提速省钱 |
+| Reviewer | 旗舰模型 · 高档思考 | 风格漂移/声音一致性是文学判断 |
+| Solver | 轻量模型 · 高档思考 | 认真读者的批注式分析，中轻量级即可 |
+
+- **深档 Writer 调度规则**：Director 派发 Writer 前查 outline 本章的结构操作/所属阶段——本章属证据收敛、推导揭示或对峙终局章 → 派发深档变体；其余章节用常规档
+- OpenCode 参考实现（`novel-writer` / `novel-writer-max` / `novel-chooser` / `novel-reviewer` / `novel-solver`）由 install.sh 自动部署到 `.opencode/agents/`，模型与档位配置见 `references/install_notes.md`
 
 **关键**：Chooser、Reviewer 与 Solver 的 {core_doc} 隔离在所有平台上统一通过 **Director 不在 prompt 中传入（并主动脱敏）** 来保证，不依赖平台权限机制。这确保了跨平台一致的行为。
 

@@ -662,7 +662,7 @@ Director（主 Agent 自身）按以下循环执行（输出核验规则见 auto
   ── 段落 1 ──
   1. 按 auto_agents.md 6.1 模板构建 Writer prompt
      （注入：身份[题材包 personas] + 风格 + {core_doc} + 角色 + 投放物状态 + outline + 上章尾 + 上帝指令 + 题材钩子[hooks]）
-  2. 派发 Writer 子任务
+  2. 派发 Writer 子任务（平台已部署角色档位时按 auto_agents.md 第七节规则选择常规/深档变体）
   3. 【核验】draft 文件增长 + 字数达标（zh 850-950字 / en 550-650词）+ <choices> 可解析 + 选项公平
      失败 → 按 auto_agents.md 6.4 轻量补救（补写/重发缺失标签/代写文件），不盲信报告
   4. 构建 Chooser prompt（前情 + 本章摘要 + 选择轨迹，⚠️ 绝不含 {core_doc}，见 auto_agents.md 6.2）
@@ -674,7 +674,7 @@ Director（主 Agent 自身）按以下循环执行（输出核验规则见 auto
 
   ── 段落 3（收拢 + 封存，Writer 只写不审）──
   11. 构建 Writer prompt（第3段模板：收拢本章 + 执行封存协议，不含编辑审阅）
-  12. 派发 Writer 子任务
+  12. 派发 Writer 子任务（深档调度规则同段落 1）
   13. 【核验】drafts/chXX.md 已重命名（否则 Director 代做 mv；并确认 chXX_draft.md 残留已清除）；
       <seal_report> 中 failed 的 meta 更新由 Director 补写
 

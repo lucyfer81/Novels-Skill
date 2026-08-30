@@ -34,6 +34,14 @@ for t in "${TARGETS[@]}"; do
   echo "✅ 已同步: $DEST_ROOT/$t"
 done
 
+# OpenCode 专属：角色档位 agents（可选增强，仅 opencode 平台）
+# novel-* 子代理定义绑定各角色的模型与思考档位（见 references/install_notes.md）
+if [ -d "$SRC/platform/opencode/agents" ]; then
+  mkdir -p "$DEST_ROOT/.opencode/agents"
+  cp "$SRC"/platform/opencode/agents/novel-*.md "$DEST_ROOT/.opencode/agents/"
+  echo "✅ 已部署 OpenCode 角色档位 agents: $DEST_ROOT/.opencode/agents/ (novel-writer / novel-writer-max / novel-chooser / novel-reviewer / novel-solver)"
+fi
+
 echo ""
 
 # OpenCode: 检查 task 权限（自动写作模式依赖子任务机制）
