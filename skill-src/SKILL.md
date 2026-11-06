@@ -67,7 +67,7 @@ description: 交互式与自主长篇小说创作工具。支持推理悬疑、�
 用户输入 `/write`、`/plan`、`/status`、`/check_pace`、`/clue`、`/edit`、`/recap`、`/finish`、`/review`、`/solver` 等 → 🔴 **先完整读取 `references/writing_loop.md`**（指令行为、上下文注入规则、章节封存协议、责任编辑机制、全稿审阅的唯一权威定义），再执行。
 
 ### 场景D：自动写作
-用户使用 `/auto-write [项目名|new]` / `/auto-chapter [项目名|new]` / `/auto-pause`，或说"自动写完" → 🔴 **先完整读取 `references/auto_agents.md` 与 `references/writing_loop.md`**（前者定义 Director/Writer/Chooser/Reviewer 四角色协议，后者定义指令行为与全稿审阅），再执行。
+用户使用 `/auto-write [项目名|new]` / `/auto-chapter [项目名|new]` / `/auto-pause`，或说"自动写完" → 🔴 **先完整读取 `references/auto_agents.md` 与 `references/writing_loop.md`**（前者定义 Director/Writer/Reviewer 角色协议——Chooser 为可选模拟读者策略、Solver 按需触发，后者定义指令行为与全稿审阅），再执行。
 
 ---
 
@@ -99,7 +99,7 @@ description: 交互式与自主长篇小说创作工具。支持推理悬疑、�
 | `/finish [项目名]` | 合并全书为完整小说文件，并自动触发两轮全稿审阅 |
 | `/review [项目名]` | 手动触发两轮全稿审阅（一致性核查 + 文学编辑评审） |
 | `/solver [项目名]` | 挑战读者测试：以无终局视角实测"读者此刻会得出什么结论"，对照核心设定文档判定误导结构是否生效（自动模式在关键章间自动执行） |
-| `/auto-write [项目名\|new]` | 自动完成从当前进度到全书终章：Writer/Chooser/Reviewer 子任务协作，Director 编排核验、过滤意见、有界修复；支持中断恢复与运行期上帝指令；完成后自动 /finish + 审阅 |
+| `/auto-write [项目名\|new]` | 自动完成从当前进度到全书终章：Writer 整章生成（正文+chapter_delta，不改权威 meta）+ Reviewer 审阅，Director 脚本化核验、过滤意见、有界修复、版本化提交；默认不模拟读者选路（可选策略开启时含 Chooser）；支持中断恢复与运行期上帝指令；完成后自动 /finish + 审阅 |
 | `/auto-chapter [项目名\|new]` | 相同机制，仅自动完成当前一章后暂停 |
 | `/auto-pause [项目名]` | 请求暂停：当前章流水线完整走完后停止，输出结算看板与恢复方式 |
 
@@ -116,16 +116,21 @@ novels/
     │   ├── project_info.md      # 类型、风格关键词、初始化选择记录
     │   ├── style_guide.md       # 风格宪法（由各轮选择生成，模板取自题材包）
     │   ├── outline.md           # 宽松大纲（章节规划，模板取自题材包）
-    │   ├── characters.md        # 角色档案（含动态状态字段）
+    │   ├── characters.md        # 角色档案（当前状态快照 + 状态历史）
     │   ├── {core_doc}           # 核心设定文档（终局事实/行为线，作者专属）
-    │   ├── {signal_doc}         # 投放物地图（线索/信号的登记与状态）
-    │   ├── continuity.md       # 连贯性登记（场景登记+事实断言，防复写/防矛盾）
-    │   └── session_log.md      # 每章摘要日志（含编辑审阅记录）
+    │   ├── {signal_doc}         # 投放物地图（线索/信号的登记与状态，含总索引）
+    │   ├── continuity.md        # 连贯性登记（场景登记+事实断言，防复写/防矛盾）
+    │   ├── session_log.md       # 每章摘要日志（最近完整条目+更早单行压缩）
+    │   ├── auto_state.json      # 自动模式检查点（phase：drafting/reviewing/fixing/committing/committed/finished）
+    │   ├── commits.json         # 版本化提交账本（正文 hash / state_revision；只经 chapter_tools.sh 写）
+    │   ├── pending/             # 待审 chapter_delta（chXX.delta.md，提交后保留为审计轨迹）
+    │   ├── history/             # 原始历史归档（session_log_archive.md 等，不因蒸馏丢弃）
+    │   └── usage.log            # 运行记录（追加式 JSONL，chapter_tools.sh usage 写入）
     ├── drafts/
     │   ├── ch01.md
     │   ├── ch02.md
     │   └── ...
-    └── {项目名}.md              # 最终合并的完整小说
+    └── {项目名}.md              # 最终合并的完整小说（chapter_tools.sh merge 生成）
 ```
 
 ---

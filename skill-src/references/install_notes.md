@@ -24,7 +24,7 @@ cp -r skill-src/* .opencode/skills/interactive-novel/
 
 ### 配置子任务权限
 
-自动写作模式需要 `task` 工具派发 Writer / Chooser / Reviewer 子任务。在 `.opencode/opencode.json` 中配置：
+自动写作模式需要 `task` 工具派发 Writer / Reviewer 子任务（Chooser 为可选策略、Solver 按需触发）。在 `.opencode/opencode.json` 中配置：
 
 ```json
 {
@@ -49,7 +49,7 @@ install.sh 会把 `skill-src/platform/opencode/agents/` 下的 `novel-*.md` 部�
 |-------|------|--------|------|------|
 | `novel-writer` | zhipuai-coding-plan/glm-5.3 | high | 0.7 | Writer 常规章节 |
 | `novel-writer-max` | zhipuai-coding-plan/glm-5.3 | max | 0.7 | Writer 收敛/揭示/终局章（深档变体） |
-| `novel-chooser` | zhipuai-coding-plan/glm-5.3-flash | low | 0.8 | Chooser 读者直觉选择 |
+| `novel-chooser` | zhipuai-coding-plan/glm-5.3-flash | low | 0.8 | Chooser 读者直觉选择（仅模拟读者策略启用时调用） |
 | `novel-reviewer` | zhipuai-coding-plan/glm-5.3 | high | 0.2 | Reviewer 责任编辑审阅 |
 | `novel-solver` | zhipuai-coding-plan/glm-5.3-flash | high | 0.4 | Solver 挑战读者测试 |
 
@@ -107,6 +107,7 @@ cp -r skill-src/* .agents/skills/interactive-novel/
 ## 4. 架构设计总结
 
 - **源码唯一性**：所有的业务逻辑、提示词宪法与协议模板均维护在 `skill-src/` 中，运行时目录（`.opencode/`、`.claude/`、`.agents/`）均为构建产物，已加入 .gitignore。修改一律改 `skill-src/`，然后运行 `install.sh` 重新同步。
+- **确定性脚本**：`scripts/textstat.sh`（统一字数口径）与 `scripts/chapter_tools.sh`（verify-draft / verify-delta / check-id / commit / verify-commits / merge / migrate / usage）承担自动流水线中一切结构化核验、版本化提交与合稿；commits.json / usage.log 只经脚本写入。
 - **题材包插件化**：题材差异（人格、初始化问题、工艺、钩子、模板）全部封装在 `references/genres/{genre}/` 题材包中；核心协议题材中立，通过抽象槽位（`{core_doc}` / `{signal_doc}`）与 manifest 引用题材包。接口契约见 `references/genres/_SPEC.md`；`install.sh` 安装前会运行 `scripts/lint_coupling.sh` 拦截核心文件的题材耦合回归。
-- **四角色协议**：Director（编排核验）/ Writer（写正文，持核心设定）/ Chooser（选走向，无真相+读者记忆）/ Reviewer（每章审阅，无真相）。真实性隔离统一靠 Director 的 prompt 编排保证，跨平台一致。
+- **角色协议**：Director（编排与脚本化核验）/ Writer（整章正文生成，持核心设定）/ Reviewer（每章审阅，无真相）/ Solver（按需：挑战读者测试）；Chooser 为可选模拟读者策略（默认关闭）。真实性隔离统一靠 Director 的 prompt 编排保证，跨平台一致。
 - **跨平台一致性**：Skill 本身不耦合平台专有 API，只声明角色协议与输入输出规范（XML 标签协议），各平台宿主 Agent 自行映射子任务调用。

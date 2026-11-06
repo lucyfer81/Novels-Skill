@@ -1,7 +1,13 @@
 # 自动写作模式：角色定义与通信协议
 
 > 本文件定义 `/auto-write` 和 `/auto-chapter` 模式中使用的子任务角色。
-> Director（执行 Skill 的主 Agent 自身）通过平台提供的子任务机制调用 **Writer**（写正文）、**Chooser**（选走向）、**Reviewer**（责任编辑审阅）、**Solver**（按需：挑战读者测试）。
+> Director（执行 Skill 的主 Agent 自身）通过平台提供的子任务机制调用 **Writer**（整章正文生成）、**Reviewer**（责任编辑审阅）、**Solver**（按需：挑战读者测试）；**Chooser**（模拟读者选路）为显式可选策略，默认关闭。
+
+## 模式划分
+
+- `/write`：交互式单段推进、真实用户选择与暂停行为（见 writing_loop.md，本文件不改变其语义）。
+- `/auto-write` / `/auto-chapter`：**整章生成**——每章一次 Writer 主任务 + 一次 Reviewer 主任务，不生成三选项、不调用 Chooser（模拟读者选路为可选策略，见第四节）。
+- 整章输出若遭平台截断，从已确认的章节文件版本继续续写（见 3.4 续写恢复任务），不自动重写全章，不依赖字数猜测完成状态。
 
 ## 〇、题材包解析（Director 的先决步骤）
 
@@ -17,7 +23,7 @@
 
 🔴 只加载当前题材的题材包，严禁将其他题材的任何内容注入子任务上下文。
 
-**注入纪律（防止题材包登记语言污染正文）**：构建 Writer prompt 时，题材包 hooks.md **只注入「write_preflight」与「signal_budget」两节全文**；「seal_check」仅随第 3 段任务指令注入；「review_dims」「full_review」只用于 Reviewer 与全稿审阅。🔴 严禁把 hooks.md 整个文件或题材包其他文件整体注入写作类子任务——封存/审阅用的编号与核对语言一旦进入写作上下文，会被模仿进正文。
+**注入纪律（防止题材包登记语言污染正文）**：构建 Writer prompt 时，题材包 hooks.md **只注入「write_preflight」与「signal_budget」两节全文**；「seal_check」仅随整章生成任务指令注入；「review_dims」「full_review」只用于 Reviewer 与全稿审阅。🔴 严禁把 hooks.md 整个文件或题材包其他文件整体注入写作类子任务——封存/审阅用的编号与核对语言一旦进入写作上下文，会被模仿进正文。
 
 **上下文传输纪律（防主会话与子任务上下文膨胀）**：大文件内容一律不以"Director 全文内联"方式进入子任务 prompt。Director 只内联**小体量且必须由 Director 保证**的内容（身份 prompt、任务指令、写作规范、前情摘要、名单与编号、读取指引）；完整文件内容一律以「路径 + 读取指引」交付子任务用 read 工具自读（平台子任务均具备文件读取能力，见第七节）。Writer 的冷启动注入因此从"全文搬运"降为"{core_doc} 骨架节 + 本章依据分节 + {signal_doc} 总索引 + 指定编号全条目"（分层记忆规则见 3.2 / 6.5）。
 
@@ -27,21 +33,22 @@
 
 | 角色 | 定位 | 上下文权限 | 文件写入权 | 输出 |
 |------|------|-----------|-----------|------|
-| **Director**（你自己） | 全局编排、输出核验、审阅过滤、方向调整 | 锁定目标 `{project_dir}`，持有全部 meta | `meta/auto_state.json`、`meta/directives.md`；封存完成后可追加 session_log | 进度汇报、修复决策 |
-| **Writer**（子任务） | 单段正文生成、封存协议、精准修复 | 绑定 `{project_dir}`，完整 meta（含 {core_doc}，按分层记忆规则自读） | 章节期间独占 `drafts/*`；仅第3段封存时写 meta 封存四件套（session_log / characters / {signal_doc} / continuity） | XML 格式（见第二节） |
-| **Chooser**（子任务） | 代替用户做走向选择 | ⚠️ **仅** 读者可见信息 + 自己的选择轨迹 | 无（纯输出，不写任何文件） | `<choice>` + `<reason>` |
-| **Reviewer**（子任务） | 每章责任编辑审阅 | ⚠️ **无** {core_doc}；角色条目已剔除 sanitize_fields 所列字段 | 无（纯输出，不写任何文件） | `<review_report>` |
+| **Director**（你自己） | 全局编排、脚本化核验、审阅过滤、版本化提交、方向调整 | 锁定目标 `{project_dir}`，持有全部 meta；**不接收正文全文** | `meta/auto_state.json`、`meta/directives.md`；提交步骤（6.7）应用 delta 写权威 meta；`commits.json` / `usage.log` 仅经 `scripts/chapter_tools.sh` 写入 | 进度汇报、修复决策 |
+| **Writer**（子任务） | 整章正文生成、chapter_delta 产出、精准修复 | 绑定 `{project_dir}`，完整 meta（含 {core_doc}，按分层记忆规则自读） | 章节期间独占 `drafts/*` 与 `meta/pending/chXX.delta.md`；🔴 **不写任何权威 meta**（session_log / characters / {signal_doc} / continuity / outline 一律由提交步骤应用，见 3.6 与 6.7） | XML 格式（见第二节） |
+| **Chooser**（子任务，可选策略） | 模拟读者做章级走向选择（默认关闭，见第四节） | ⚠️ **仅** 读者可见信息 + 自己的选择轨迹 | 无（纯输出，不写任何文件） | `<choice>` + `<reason>` |
+| **Reviewer**（子任务） | 每章责任编辑审阅 | ⚠️ **无** {core_doc}；角色条目已剔除 sanitize_fields 所列字段；正文以路径自读 | 无（纯输出，不写任何文件） | `<review_report>` |
 | **Solver**（子任务，命中触发条件即强制） | 挑战读者测试：实测无终局视角的读者当前推论 | ⚠️ 与 Chooser 同级隔离（读者可见语料摘要版，见 4.4） | 无（纯输出，不写任何文件） | `<solver_report>` |
 
 ⚠️ **核心约束**：
 
 1. **真实性隔离（三重）**：Chooser、Reviewer 与 Solver 都不得接触 `{core_doc}`（核心设定文档）的任何内容。Chooser 靠 Director 不传入保证；Reviewer 靠 Director 构建**脱敏上下文**保证（含 characters.md 中 manifest「sanitize_fields」所列终局性字段的剔除，见 5.2）；Solver 靠 Director 只注入读者可见语料摘要保证（见 4.4）。这样"读者视角选择""读者视角审阅"与"读者视角实测推论"都是真实的无真相视角，而不是 Writer 持真相自我模拟。
-2. **选项公平性**：Writer 持有核心设定生成三分选择，必须遵守选项公平性原则（见 3.3），Director 负责核验。
+2. **选项公平性（仅模拟读者策略启用时）**：Writer 持有核心设定生成分选择时，必须遵守选项公平性原则（见 4.0），Director 负责核验。
 3. **多项目隔离**：Director、Writer、Chooser、Reviewer **仅限在锁定的目标 `{project_dir}`（即 `novels/{项目名}`）** 目录下读写。严禁跨目录访问或修改其他小说。
-4. **meta 写权划分（防双写冲突）**：
-   - 章节流水线期间，Writer 独占 `meta/session_log.md`、`meta/characters.md`、`meta/{signal_doc}`、`meta/continuity.md` 的写权，且仅在**第3段封存协议**中行使；
-   - Director 仅写 `meta/auto_state.json` 与 `meta/directives.md`；
-   - Director 的 🟡 记录、章间蒸馏等 meta 写入，**必须在封存完成之后**进行。
+4. **meta 写权划分（防双写冲突；delta 模式）**：
+   - Writer 仅写 `drafts/*` 与 `meta/pending/chXX.delta.md`；🔴 禁止写 meta/ 下任何权威文件
+   - Director 写 `meta/auto_state.json` 与 `meta/directives.md`；权威 meta（session_log / characters / {signal_doc} / continuity / outline）只在**提交步骤（6.7）应用 delta 时**由 Director 亲自写入（小操作，不派子任务）；提交后的 Solver 判定留痕等追加亦由 Director 执行
+   - `commits.json` 与 `usage.log` 只经 `scripts/chapter_tools.sh` 写入（commit / usage 子命令），Director 不手工编辑
+   - 交互模式（/write）不受影响：主 Agent 自己执行封存协议（见 writing_loop.md），无子任务写权问题
 
 ---
 
@@ -51,13 +58,10 @@
 
 | 标签 | 使用者 | 内容 |
 |------|--------|------|
-| `<prose>` | Writer | 本段正文 |
-| `<choices>` | Writer | 三分选择（状态句 + A/B/C 选项） |
-| `<segment_meta>` | Writer | 字数、投放物、角色变化 |
-| `<seal_report>` | Writer | 第3段封存协议执行结果 |
-| `<postscript>` | Writer | 第3段写作后记 |
-| `<fix_report>` | Writer | 修复任务执行结果 |
-| `<choice>` / `<reason>` | Chooser | 走向选择 / 理由 |
+| `<chapter_report>` | Writer | 整章生成结果短报告（路径 / base_revision / delta 状态 / 字数自报 / 读者摘要 / 作者备注 / 可选 next_choices；**不含正文全文与 delta 全文**，见 3.5） |
+| `<chapter_delta>` | Writer | 章节状态变化增量——**只写入文件** `meta/pending/chXX.delta.md`，不在对话输出（结构与校验契约见 3.6；审阅与修复通过后由提交步骤应用） |
+| `<fix_report>` | Writer | 修复任务执行结果（含 delta 是否已重新生成） |
+| `<choice>` / `<reason>` | Chooser | 走向选择 / 理由（仅模拟读者策略启用时） |
 | `<review_report>` | Reviewer | 编辑审阅报告（A-D 维度 + 定级清单） |
 | `<solver_report>` | Solver | 挑战读者测试报告（领先推论 / 支撑投放物 / 信心度 / 困惑点） |
 
@@ -72,14 +76,14 @@
 Writer 的身份 prompt 按以下模板拼接（人格本体是题材包单一事实来源，本文件不定义题材人格）：
 
 ```
-你是一位深谙{题材}小说工艺的作家，正在接受编辑（Director）的指令完成单段正文生成。
+你是一位深谙{题材}小说工艺的作家，正在接受编辑（Director）的指令完成整章正文生成。
 
 {references/genres/{genre}/personas.md 中「写作人格」一节的全文，原样内联}
 ```
 
-### 3.2 接收的上下文
+### 3.2 接收的上下文（每章一次资料准备）
 
-Director 每次调用 Writer 子任务时，prompt 由**内联部分**（体积小、必须由 Director 保证）与**自读清单**（路径 + 读取指引，Writer 用 read 工具自行读取，禁止跳过）构成。
+Director 每章调用一次 Writer 子任务，prompt 由**内联部分**（体积小、必须由 Director 保证）与**自读清单**（路径 + 读取指引，Writer 用 read 工具自行读取，禁止跳过）构成。
 
 **内联部分**：
 
@@ -97,12 +101,12 @@ Director 每次调用 Writer 子任务时，prompt 由**内联部分**（体积�
    （outline 本章「核心依据」字段）；任一缺省 → 指引为"全文读取"；揭示/终局章一律"全文读取"
 
 6. 前情摘要：最近 2 章 session_log 条目（核心事件、角色变化、故事内时间/地点、信息增量、
-   下章切入点——每章封存后提取一次，章内三段复用，不重复读文件。
+   下章切入点——每章提交后提取一次，整章任务一次注入，不重复读文件。
    ⚠️ Writer 持有核心设定，注入无需脱敏——这是子任务衔接前情、避免跨章矛盾的主通道）
 
-7. 当前草稿状态：draft 路径 + 已有段数（ls / wc 判定，不全文读；正文衔接由 Writer 自读 draft 完成）
+7. 上帝指令（若 meta/directives.md 中存在未完成且适用于本章的指令）
 
-8. 上帝指令（若 meta/directives.md 中存在未完成且适用于本章的指令）
+8. 上章读者选择（仅模拟读者策略启用时：Chooser 对本章开场走向的选择及理由，见第四节）
 
 9. 写作规范（3.3 节，含题材包 hooks.md 两节全文）+ 输出协议（第二节 Writer 部分）+ 任务指令（3.4 节）
 ```
@@ -121,7 +125,8 @@ Director 每次调用 Writer 子任务时，prompt 由**内联部分**（体积�
    写作中若触及索引内其他活跃投放物，必须先 read 该条目全文再落笔（按需加载）；
    文件无「总索引」节 → 全文读取
 
-4. {project_dir}/drafts/chXX_draft.md 全文（存在时）；否则上一章 chXX.md 最后 500 字
+4. 上一章 {project_dir}/drafts/chXX.md 最后 500 字（本章为第1章时省略；
+   续写恢复场景改为：本章 drafts/chXX_draft.md 已有正文全文，从其末尾续写）
 
 5. {project_dir}/meta/outline.md 本章小节
 
@@ -138,12 +143,10 @@ Director 每次调用 Writer 子任务时，prompt 由**内联部分**（体积�
 ## 写作规范
 
 - 本项目根路径为：{project_dir}，所有文件操作仅在此目录下进行
-- 每段目标：zh 850–950 字 / en 550–650 词（硬约束）
-- 低于下限：禁止结束，必须补写至达标
-- 超过上限：检查是否有可拆入下一段的内容，若无则允许保留
-- 正文生成后，立即将本段 append 写入 {project_dir}/drafts/chXX_draft.md
-- 第一段创建文件并写入章节标题 + 正文
-- 第二、三段 append 到同一文件末尾
+- 本章目标：zh 约 2700 字 / en 约 1800 词（章级目标，可由项目覆盖）
+- 容差范围：zh 2300–3100 字 / en 1500–2000 词——低于下限禁止结束生成，须补写至达标；
+  高于上限检查是否有可拆入下一章的内容，若无则允许保留
+- 正文生成后，将整章写入 {project_dir}/drafts/chXX_draft.md（含章节标题）
 
 ### 写作前行为预检
 
@@ -152,51 +155,60 @@ Director 每次调用 Writer 子任务时，prompt 由**内联部分**（体积�
 ### 投放原则
 
 {题材包 hooks.md「signal_budget」全文}
-
-### 选项公平性原则（生成三分选择时强制遵守）
-
-你持有核心设定文档，但三分选择的三个选项必须对不知道终局的读者完全公平：
-- 三个选项的信息量、具体度、预告字数相当（差距不超过 20%）
-- 禁止利用核心设定让某个选项显得"更安全""更正确""更回避"或措辞更含糊
-- 每个选项都必须与核心设定兼容——选择改变的是路径，不是既定事实
-- 禁止在选项措辞或预告中暗示"哪个选项更接近终局真相"
 ```
 
 ### 3.4 任务指令模板
 
-**第 1 段**：
+**整章生成**：
 ```
-请写第{N}章第1段。这是本章的开场段。
-推进到一个"信息悬停点"后结束。
-写完后将正文 append 到 {project_dir}/drafts/ch{NN}_draft.md（创建文件，含章节标题）。
-然后按公共输出协议输出 <prose>、<choices>、<segment_meta>。
-```
+请写第{N}章完整正文。依据 outline 本章计划与「前情摘要」衔接上一章末尾，
+完成本章全部计划节点，以"悬而未决的尾音"收章——不解答，提出下一章的核心问题。
 
-**第 2 段**：
-```
-请写第{N}章第2段。
-上一段结束后，读者选择了方向{choice}："{choice_description}"。
-请根据此走向推进，到"张力转折点"后结束。
-写完后将正文 append 到 {project_dir}/drafts/ch{NN}_draft.md。
-然后按公共输出协议输出 <prose>、<choices>、<segment_meta>。
-```
+🔴 权威状态版本 base_revision = {R}（由任务指令注入）。你不修改 meta/ 下任何权威文件
+（session_log、characters、{signal_doc}、continuity、outline）——状态变化一律记入 chapter_delta。
 
-**第 3 段**（只写不审——编辑审阅由独立的 Reviewer 负责）：
-```
-请写第{N}章第3段（最终段）。
-上一段结束后，读者选择了方向{choice}："{choice_description}"。
-请收拢本章，以"悬而未决的尾音"结束——不解答，提出下一章的核心问题。
 写完后：
-1. 将正文 append 到 {project_dir}/drafts/ch{NN}_draft.md
-2. 将 {project_dir}/drafts/ch{NN}_draft.md 重命名为 {project_dir}/drafts/ch{NN}.md（mv 移动，原 draft 文件不得保留）
-3. 执行章节封存协议（更新 {project_dir}/meta/ 下 session_log、characters、{signal_doc}、continuity；核对按随本指令注入的题材包 hooks.md「seal_check」一节执行）
-4. 按公共输出协议输出 <prose>、<seal_report>、<postscript>（无需输出编辑审阅和三分选择）
+1. 将整章写入 {project_dir}/drafts/ch{NN}_draft.md（创建文件，含章节标题），
+   随后将该文件重命名为 {project_dir}/drafts/ch{NN}.md（必须 mv 移动，原 draft 文件不得保留）
+2. 运行 sha256sum 计算 drafts/ch{NN}.md 的哈希，然后按 3.6 契约生成 <chapter_delta>，
+   写入 {project_dir}/meta/pending/ch{NN}.delta.md（整章任务唯一允许写的 meta 路径）。
+   signal_changes 的登记内容与核对纪律（投放预算/结构核对/终章断言——发现缺投就地补投进正文）
+   按随本指令注入的题材包 hooks.md「seal_check」执行；其中"更新 {signal_doc} / 回写 outline"
+   的动作一律转为 delta 对应字段，不改权威文件
+3. 按公共输出协议输出 <chapter_report>（不输出正文全文与 delta 全文）
 ```
 
-**修复任务**：
+**续写恢复**（整章输出被截断 / drafting 阶段中断后续跑，禁止重写全章）：
+```
+第{N}章生成中断。读取 {project_dir}/drafts/ch{NN}_draft.md 已有正文，
+从最后一个完整段落之后继续写至本章收尾（禁止重写或改动已有部分）。
+完成后按整章生成任务的步骤 1-3 执行（mv 重命名、生成 delta、输出 <chapter_report>）；
+base_revision = {R}。
+```
+
+**delta 补生成**（正文已落盘但 delta 缺失 / 校验失败时的轻量任务，禁止改动正文）：
+```
+第{N}章正文已存在但 chapter_delta 缺失或已失效。读取 {project_dir}/drafts/ch{NN}.md 全文，
+仅依据正文实际内容生成 <chapter_delta>（3.6 契约）：base_revision = {R}；
+prose_hash 以你运行的 sha256sum 实测为准。写入 {project_dir}/meta/pending/ch{NN}.delta.md（覆盖旧文件）。
+不改 drafts/ 下任何文件，不改权威 meta，不输出正文。完成后输出 <chapter_report>（word_count 填实测口径）。
+```
+
+**补写**（字数低于章级下限时；必须绑定目标版本与位置，禁止"重新 append"式整段重写）：
+```
+第{N}章正文低于章级字数下限（当前统计：{textstat 结果}）。
+目标版本：{project_dir}/drafts/ch{NN}.md。
+请仅在本章收尾段之内定向扩写至达标：定位现有结尾段落，就地扩写场景与细节，
+不新增结构性情节，不改动其余正文。修改写入该文件后，重新运行 sha256sum 并
+按 3.6 契约重新生成 delta 覆盖 {project_dir}/meta/pending/ch{NN}.delta.md
+（base_revision 不变 = {R}；全章级字段按扩写后现状重算）。输出 <fix_report>。
+```
+
+**修复任务**（同样必须绑定目标版本）：
 ```
 请修复第{N}章的以下问题。这是精准修复，不是重写。
 项目目录：{project_dir}
+目标版本：{project_dir}/drafts/ch{NN}.md（修复针对该版本；若文件此后被改动，先停止并报告版本冲突）
 
 问题（来自责任编辑）：{问题描述}
 建议方向：{建议方向}
@@ -206,58 +218,33 @@ Director 每次调用 Writer 子任务时，prompt 由**内联部分**（体积�
 2. 修改后全章字数变化控制在 ±10% 以内
 3. 严格遵守下方风格宪法与角色档案
 4. 修改后直接更新该文件，并输出 <fix_report>
-5. **meta 同步（强制）**：若改动涉及已投放物的文本/位置、角色状态、称谓、时间线或角色获知的信息 → 同步更新 {signal_doc} / characters.md 对应条目，并在 session_log.md 追加一行修改记录（此项结果写入 <fix_report> 的 meta_synced）
+5. **delta 重生成（强制，替代旧版 meta 同步）**：正文变更后重新运行 sha256sum，
+   将 <chapter_delta> 整体重新生成并覆盖 {project_dir}/meta/pending/ch{NN}.delta.md
+   （base_revision 不变 = {R}；所有章节级字段按修复后全章现状重算，不只写改动部分——
+   旧 delta 绑定旧正文版本，会被脚本校验拒绝）。🔴 禁止直接修改权威 meta
 ```
 
-（修复任务的 prompt 必须附：style_guide 两节 + 相关角色完整条目 + 问题所在段落的上下文，防止修复引入风格漂移。）
+（修复/补写任务的 prompt 必须附：style_guide 两节 + 相关角色完整条目 + 问题所在段落的上下文，防止修复引入风格漂移。）
 
 ### 3.5 Writer 输出格式
 
-**第 1 / 2 段输出**：
+**整章生成输出**（正文与 delta 全文只落盘，不进入报告）：
 
 ```
-<prose>
-[本段正文，zh 850-950字 / en 550-650词]
-</prose>
-
-<choices>
-状态：[一句话说明当前剧情状态]
-A. [选项名] → [2句话预告]
-B. [选项名] → [2句话预告]
-C. [选项名] → [2句话预告]
-</choices>
-
-<segment_meta>
-word_count: {N}
-planted: [投放物描述或 none]
-character_changes: [描述或 none]
-</segment_meta>
-```
-
-**第 3 段输出**：
-
-```
-<prose>
-[本段正文]
-</prose>
-
-<seal_report>
-draft_renamed: yes|no
-session_log: updated|failed
-characters: updated|failed
-signal_doc: updated|failed
-continuity: updated|failed|skipped_legacy
-outline_exec: updated|failed
-</seal_report>
-
-<postscript>
-- 本章投放：[投放物描述]
-- 角色状态变化：[描述]
-- 信息增量：[本章谁新获知了什么（角色→信息，含来源），或 none]
-- 读者已知 / 不知信息对比：已知：... 不知：...
-- Showing 自查（⚠️ 仅输出命中项，未命中的检查项与清单本身不要输出；无命中写"无"）：
-  [按题材包 hooks.md「showing_checklist」自查——通用项 + 题材专项项]
-</postscript>
+<chapter_report>
+chapter: {N}
+base_revision: {R——与任务指令注入值一致}
+draft_path: drafts/ch{NN}.md
+delta_path: meta/pending/ch{NN}.delta.md
+delta: written|failed（failed → Director 按 3.4 派 delta 补生成任务）
+word_count: {自报统计（zh 字数 / en 词数）——以 Director 脚本核验为准}
+reader_summary: [100字以内，仅含正文已公开信息——供 Chooser/Reviewer 前情摘要复用]
+author_notes: [仅报告偏差与待核查问题：计划偏离及原因、投放异常、showing 自查命中项
+  （按题材包 hooks.md「showing_checklist」仅报命中项）、信息增量要点；无则写 none。
+  ⚠️ 本字段不得进入 Chooser/Reviewer 读者资料包]
+next_choices: [仅模拟读者策略启用时输出：状态句 + A/B/C 三个下一章开场走向（选项公平性原则见 4.2）]
+status: ready_for_review
+</chapter_report>
 ```
 
 **修复任务输出**：
@@ -266,14 +253,93 @@ outline_exec: updated|failed
 <fix_report>
 problem: [原问题一句话复述]
 applied: yes|partial|no
-meta_synced: yes|no|not_needed
+delta_regenerated: yes|no
 summary: [实际改了什么，2句话]
 </fix_report>
 ```
 
+### 3.6 chapter_delta 契约（Writer 产出、Director 提交时应用）
+
+Writer 整章/续写/delta 补生成/修复/补写任务均产出 delta，写入 `meta/pending/ch{NN}.delta.md`（覆盖旧版本）。**分界**：LLM（Writer）负责提取语义变化，脚本（chapter_tools.sh verify-delta）负责结构、字段、版本与正文绑定；脚本不能证明小说语义一致，正文新事实遗漏于 delta 属专门风险——Director 在 6.4 核验时抽查 source_passages 与正文对应。
+
+文件格式（各节标签**全部必需**，无内容写"无"；缺任一节 verify-delta 直接拒绝）：
+
+```
+<chapter_delta>
+chapter: {N}
+base_revision: {R——任务指令注入的权威状态版本，提交前校验}
+prose_path: drafts/ch{NN}.md
+prose_hash: {sha256sum 实测——把 delta 绑定到具体正文版本}
+
+<new_facts>
+- {正文新确立的事实}｜来源: {段落定位}
+</new_facts>
+
+<revised_facts>
+- {对既有事实的修订：旧断言 → 新断言}｜依据: {段落定位}
+</revised_facts>
+
+<scene_changes>
+- 场景: {名}｜地点: {…}｜氛围/视角: {…}｜已用关键细节意象: {一句话}｜来源: {段落定位}
+</scene_changes>
+
+<character_state_changes>
+- 角色: {名}｜变化: {位置/身体/物品/称谓/状态}｜来源: {段落定位}
+</character_state_changes>
+
+<information_acquisitions>
+- 角色: {名}｜获知: {信息}｜来源: {谁/什么载体}｜章内顺序: {序号}
+</information_acquisitions>
+
+<signal_changes>
+- 编号: {ID}｜操作: 新增登记｜内容: {一句话}｜正文摘录: {原文短引}
+- 编号: {ID}｜操作: 状态更新（{旧状态}→{新状态}）｜依据: {正文摘录或段落定位}
+- 编号: {ID}｜操作: 总索引行（新增/更新后的一行）
+</signal_changes>
+
+<outline_deviations>
+- {计划偏离与原因；无则写"无"——outline 本章「实际执行」由提交步骤依据本节与计划对照回写}
+</outline_deviations>
+
+<unresolved_issues>
+- {Writer 自报待核查问题；无则写"无"}
+</unresolved_issues>
+
+<source_passages>
+- {new_facts/character_state_changes/information_acquisitions 各关键条目对应的正文定位：
+  段首引文或「第X段·角色Y」式定位，供提交时定向核验，不复制大段正文}
+</source_passages>
+</chapter_delta>
+```
+
+字段纪律：
+- **信息获得事件**必须含获得者、获知内容、来源、章内顺序——知识边界核查以章初状态 + 顺序事件为基准，不能只用章末快照
+- **signal_changes** 中新登记编号必须先自检未被占用（提交时 Director 以 `chapter_tools.sh check-id` 复核）；总索引行同步给出，保证"一条不少"
+- **source_passages** 只写定位与短引，禁止整段复制正文（防 delta 变成第二份正文）
+- delta 文件本身不含正文全文、不含 {core_doc} 内容；修复后重生成时全部字段按修复后全章现状重算
+
 ---
 
-## 四、Chooser 角色
+## 四、Chooser 角色（可选策略：模拟读者选路，默认关闭）
+
+### 4.0 启用条件与调用时机
+
+默认策略下自动模式不调用 Chooser（不生成三选项，不承担模拟读者成本）。仅当满足以下任一条件时启用 `strategy: simulate_reader`：
+
+- `/auto-write --simulate-reader [项目名|new]` 显式开启
+- 运行期指令（"开启/关闭模拟读者选路"）切换 auto_state.json 的 strategy 字段
+
+启用后的调用时机：**每章一次、章级粒度**——Writer 在 `<chapter_report>` 的 next_choices 字段给出下一章开场的三分走向；本章提交后派发 Chooser 选择；选择写入 chooser_log，并注入下一章 Writer prompt 的「上章读者选择」节。
+
+**选项公平性原则（启用时注入 Writer prompt，生成 next_choices 强制遵守）**：
+
+```
+你持有核心设定文档，但三分选择的三个选项必须对不知道终局的读者完全公平：
+- 三个选项的信息量、具体度、预告字数相当（差距不超过 20%）
+- 禁止利用核心设定让某个选项显得"更安全""更正确""更回避"或措辞更含糊
+- 每个选项都必须与核心设定兼容——选择改变的是路径，不是既定事实
+- 禁止在选项措辞或预告中暗示"哪个选项更接近终局真相"
+```
 
 ### 4.1 身份 prompt
 
@@ -303,10 +369,9 @@ Director 构建 Chooser prompt 时，**仅**传入以下内容：
 1. Chooser 身份 prompt（上方；{题材显示名} 取自题材包 manifest 的 display）
 2. genre + language
 3. 前情回顾：最近 2 章的读者安全摘要（来源 session_log，仅提取"核心事件/角色变化/读者已知"字段，见 6.5 提取规则）
-4. 本章此前段落的剧情摘要（Director 基于当前 draft 生成，200字以内）
-5. 最新一段的剧情状态（Writer 输出的 <choices> 中的"状态"句）
-6. 你的选择轨迹（来自 auto_state.json 的 chooser_log：此前每章每段的选择 + 理由）
-7. 三分选择文本（原样转发 Writer 输出的 <choices> 内容）
+4. 本章正文的读者摘要（Writer 输出的 <chapter_report>.reader_summary——仅含正文已公开信息）
+5. 你的选择轨迹（来自 auto_state.json 的 chooser_log：此前每章的选择 + 理由）
+6. 三分选择文本（原样转发 Writer 输出的 next_choices 内容：状态句 + A/B/C 选项）
 ```
 
 ⚠️ **以下内容绝对不得出现在 Chooser prompt 中**：
@@ -323,7 +388,7 @@ Director 构建 Chooser prompt 时，**仅**传入以下内容：
 <reason>[1-2句话，从读者角度]</reason>
 ```
 
-### 4.4 Solver 变体（挑战读者测试；触发点命中即必须派发，见 writing_loop.md /auto-write 步骤 19.5）
+### 4.4 Solver 变体（挑战读者测试；触发点命中即必须派发，见 writing_loop.md /auto-write 步骤 12）
 
 Solver 与 Chooser 共享"读者立场 + 无真相视角"，但任务不同：Chooser 做选择，Solver **报告自己此刻的推论**——用于实测误导结构与投放物在读者端是否生效。
 
@@ -371,7 +436,7 @@ Solver 与 Chooser 共享"读者立场 + 无真相视角"，但任务不同：Ch
 - 领先推论 = 当前应生效的假象/误导结构 → ✅ 结构生效，无需动作
 - 领先推论 = 终局事实 → ⚠️ 提前泄漏：检查近期投放物指向性是否过强，考虑调整后续投放顺序（更新 outline「章节计划变更记录」并写明原因）
 - 领先推论 = 早已被推翻的旧结构，或无法组织任何推论 → ⚠️ 支撑不足：下章补维持性证据，或让主角做一次梳理
-- 结论以一行【挑战读者测试】条目追加 session_log（封存完成后写入，遵守 meta 写权）
+- 结论以一行【挑战读者测试】条目追加 session_log（提交完成后写入，遵守 meta 写权——自动模式下 Solver 在提交后派发，见 writing_loop /auto-write 步骤 12）
 
 ---
 
@@ -392,13 +457,16 @@ Reviewer 的身份 prompt 按以下模板拼接（编辑人格本体是题材包
 ```
 1. Reviewer 身份 prompt（上方模板，题材包 personas.md「编辑人格」）
 2. genre + language + 章节号
-3. 上一章的读者安全摘要（连续性参照，提取规则见 6.5）
-4. 本章正文全文（{project_dir}/drafts/chXX.md）
-5. {project_dir}/meta/style_guide.md 的「绝对禁止」和「样板句式」两节
+3. 上一章的读者安全摘要（连续性参照，提取规则见 6.5）；本章衔接可加 Writer 的 reader_summary
+4. 本章正文路径：{project_dir}/drafts/chXX.md（Reviewer 用 read 工具自读——Director 不内联全文）
+5. {project_dir}/meta/style_guide.md 的「绝对禁止」和「样板句式」两节（路径 + 定向读取指引）
 6. 本章出场角色条目（脱敏版）：保留身份、性格、说话方式、当前状态、称谓、当前已知信息；
    🔴 必须剔除 manifest「sanitize_fields」所列的全部终局性字段
    （「当前已知信息」不含终局指针，保留它是为了让 Reviewer 能检查"角色说出/做出超出其已知范围的事"）
 7. {signal_doc} 中状态为"已投放"的投放物清单（待投放一律剔除；带 🔒 标记的真相指针字段按 6.5 规则剔除）
+8. 本章新投放物清单（来自 meta/pending/chXX.delta.md 的 signal_changes——delta 在审阅时尚未提交，
+   {signal_doc} 停留在上一章状态；delta 的 signal_changes 只含编号/内容/正文摘录，无 🔒 字段，可安全注入。
+   供 Reviewer 对照本章投放公平性与读者可用性）
 ```
 
 ⚠️ Reviewer prompt 中**绝对不得出现**：{core_doc}、待投放物、未写到的 outline 内容、characters.md 中的 sanitize_fields 所列字段。Reviewer 与 Chooser 一样是无真相视角。
@@ -437,7 +505,7 @@ D. 问题定级清单
 
 ## 六、Director 编排协议
 
-### 6.1 调用 Writer 的 prompt 构建模板
+### 6.1 调用 Writer 的 prompt 构建模板（每章一次）
 
 > 体积纪律：本模板只内联小体量内容；大文件一律走「自读清单」（见第〇节上下文传输纪律）。
 
@@ -454,16 +522,18 @@ language: {language}
 ## 本章参数
 - 出场角色：{名单}；首次出场：{名单（三字段纪律见自读清单第2项）}
 - 应投/将触碰投放物编号：{编号列表，或"无"}
+- base_revision: {R——meta/commits.json 的 state_revision 实读值；Writer 不得读写 commits.json}
 - {core_doc} 读取指引：{骨架节标题（manifest core_skeleton）} + {outline 本章「核心依据」字段指向的分节}；任一缺省或本章为揭示/终局章 → "全文读取"
 
 ## 前情摘要（你写作的衔接基准）
 {最近 2 章条目：核心事件、角色变化、故事内时间/地点、信息增量、下章切入点}
-
-## 当前草稿
-{draft 路径与已有段数（ls/wc 判定）；或"本章第1段——上一章末尾见自读清单第4项"}
+{上一章末尾原文见自读清单第4项}
 
 ## 上帝指令（若有）
 {meta/directives.md 中适用于本章且未完成的指令；无则省略本节}
+
+## 上章读者选择（仅模拟读者策略启用时）
+{Chooser 对本章开场走向的选择与理由；默认策略下省略本节；第1章省略}
 
 ## 自读清单（用 read 工具依次完整读取，禁止跳过；正文衔接以自读结果为准）
 {3.2 节自读清单的实例化：各文件路径 + 上方读取指引}
@@ -477,10 +547,11 @@ language: {language}
 ---
 
 ## 任务
-{根据段落编号选择 3.4 节中对应的任务指令模板}
+{3.4 节整章生成模板（或续写恢复/补写/修复模板，按场景选择）}
+{模拟读者策略启用时，任务末尾追加：本章 chapter_report 须含 next_choices 字段（公平性原则见 4.0）}
 ```
 
-### 6.2 调用 Chooser 的 prompt 构建模板
+### 6.2 调用 Chooser 的 prompt 构建模板（仅 simulate_reader 策略）
 
 ```
 {Chooser 身份 prompt}
@@ -492,17 +563,15 @@ language: {language}
 ## 前情回顾（你已读过的最近章节）
 {最近 2 章的读者安全摘要}
 
-## 本章此前发生了什么
-{Director 基于本章此前 Writer 已返回的 <prose> 生成的剧情摘要，200字以内——正文已在 Director 上下文中，🔴 禁止为生成摘要重读 draft 文件}
-
-## 最新一段的剧情状态
-{Writer 输出的 <choices> 中的状态句}
+## 本章发生了什么
+{Writer 输出的 <chapter_report>.reader_summary——仅含正文已公开信息；
+🔴 禁止为生成摘要重读 draft 文件，禁止使用 author_notes}
 
 ## 你的选择轨迹
-{chooser_log 逐条：第X章第Y段：选了B——理由摘录}
+{chooser_log 逐条：第X章：选了B——理由摘录}
 
-## 三个走向选项
-{Writer 返回的 <choices> 中的 A/B/C 选项原文}
+## 三个走向选项（下一章开场）
+{Writer 返回的 next_choices 原文：状态句 + A/B/C 选项}
 
 ---
 
@@ -521,8 +590,8 @@ language: {language}
 ## 上一章发生了什么（你的记忆）
 {上一章读者安全摘要}
 
-## 本章正文
-{{project_dir}/drafts/chXX.md 全文，由 Director 内联}
+## 本章正文（用 read 工具自读，禁止跳过）
+{project_dir}/drafts/chXX.md
 
 ## 风格宪法（节选）
 {style_guide 的"绝对禁止"和"样板句式"两节}
@@ -539,32 +608,43 @@ language: {language}
 审阅纪律：每条意见必须引用正文原文位置；没有依据的夸赞或批评不要写。
 ```
 
-### 6.4 输出核验协议（Director 不盲信子任务报告；核验用工具命令，禁止全文读入）
+### 6.4 输出核验协议（Director 不盲信子任务报告；结构化核验一律调 scripts/chapter_tools.sh，禁止全文读入正文）
 
-**核验纪律（控制 Director 上下文膨胀）**：正文已随 Writer 返回的 `<prose>` 存在于 Director 上下文中，🔴 **禁止再读取 draft 全文做核验**。文件增长、字数、段数一律用工具命令（`ls -l` / `wc -c` / `wc -w`）判断；meta 封存核验只做**定向读**（`tail` session_log 新增条目、grep outline 本章「实际执行」字段），不重读整个 meta 文件。
+**核验纪律（控制 Director 上下文膨胀）**：Writer 只返回 `<chapter_report>`，正文全文与 delta 全文仅存在于磁盘——Director **不接收、不核验、不转交正文全文**。存在性、体量、hash、版本、字段结构、编号唯一性一律用 `chapter_tools.sh` / `textstat.sh` 判断；提交前的 meta 核验只做**定向读**（grep 本章关键字段），不重读整个 meta 文件。路径、长度、hash、版本以脚本实际结果为准，不盲信模型自报。
 
-**每次 Writer 返回后，Director 必须执行实体核验**：
+**Writer 返回后，Director 必须执行实体核验**：
 
 ```
-1. 文件核验（用 ls -l / wc -c 对比写入前后的字节数，不读内容）：
-   - 文件未创建/未增长：
-      a. 若返回的 <prose> 内容完整 → Director 代为写入（append）
-      b. 若 <prose> 缺失或截断 → 重试整个 Writer 子任务 1 次；仍失败 → 暂停报错请求干预
-   - 字数核验（zh: wc -c 近似，1段 ≈ 2700字节 / en: wc -w，1段 ≈ 600词）：
-      a. 低于下限（850字/550词）→ 派发补写子任务："仅将本段补写至达标后重新 append，不改动已有内容"
-      b. 高于上限（950字/650词）→ 接受（Writer 已确认无可拆分）
-   - 编号泄漏核验（正文纯净性）：`grep -nE '（[A-Z]+[-－]?[0-9]+）'` 检查写入后的文件（全角括号内"大写字母+数字"的登记编号样式）→ 命中 → 派发轻量修复子任务："仅删除正文中的编号/结构术语标注，其余正文一字不动"
-   - 段数判定（中断恢复/第0步同样适用）：按字节增长近似（zh 每段约2700字节 / en 每段约600词），或 grep 空行分段计数；不全文读入
-2. 段1/2：<choices> 可解析且含 A/B/C 三项 → 解析失败按第二节轻量重试
-3. 选项公平性核验：三个选项预告字数差距是否超过约 1 倍、某选项是否明显空洞/含糊
-   → 可疑时要求 Writer 仅重新输出 <choices>（并提醒选项公平性原则）
-4. 段3额外核验：
-   - {project_dir}/drafts/chXX.md 是否存在（重命名是否执行，用 ls 判断）→ 未执行则 Director 代为重命名（必须 mv 移动，禁止 cp 复制）
-   - 🔴 残留核验：确认 chXX_draft.md 已消失。若 chXX.md 与 chXX_draft.md 并存（复制而非移动的典型症状）→ 删除残留的 draft 文件（否则 6.7 中断恢复会误判该章未完成，导致重写已封存章节）
-   - <seal_report> 中标记 failed 的 meta 更新 → 由 Director 亲自补写对应文件
-   - 封存内容核验（定向读）：tail session_log 检查新条目是否含「故事内时间/地点」「信息增量」字段；grep outline 本章「实际执行」是否已回写；缺漏 → Director 补写
-   - 幂等核验：tail session_log 检查同章摘要条目或逐字相同的【修改记录】是否重复追加（幂等失败）→ 删除多余，仅保留一条
-5. 修复任务核验：<fix_report>.applied = yes 且 meta_synced ≠ no（no → Director 亲自补写 meta 对应条目）
+1. 正文核验：bash scripts/chapter_tools.sh verify-draft {project_dir} {NN}
+   - exit 2（ch{NN}_draft.md 残留、正式文件缺失）→ 派发续写恢复任务（3.4 模板）
+   - exit 1（两者均无）→ 重试整个 Writer 子任务 1 次；仍失败 → 暂停报错请求干预
+   - zh_chars / en_words 低于章级下限（zh 2300 / en 1500）→ 派发补写任务（3.4 模板）
+   - 高于上限（zh 3100 / en 2000）→ 接受（Writer 已确认无可拆分）
+   - id_leak 命中（正文残留登记编号样式）→ 派轻量修复子任务：
+     "仅删除正文中的编号/结构术语标注，其余正文一字不动"（修复后按 3.4 修复模板要求重生成 delta）
+2. delta 核验：bash scripts/chapter_tools.sh verify-delta {project_dir} {NN}
+   - 字段/标签缺失（exit 1）→ 轻量重试：派 delta 补生成任务（3.4 模板）
+   - base_revision 不匹配（exit 3）→ 权威状态已前进：以当前 state_revision 重新注入派 delta 补生成
+   - prose_hash 不匹配（exit 3）→ delta 绑定旧版正文（修复后未重生成）→ 派 delta 补生成任务
+3. <chapter_report> 可解析：draft_path / delta_path / base_revision / status 必填且
+   status = ready_for_review、base_revision 与注入值一致；delta=failed → 派 delta 补生成任务
+4. 章首衔接查重（第2章起；防"章首重写上章末"式重述接缝）：
+   对照 `tail -n 15 上一章chXX-1.md` 与 `head -n 15 本章chXX.md`（Director 只读这约30行）——
+   出现整句级重述（同一对白/叙述近乎原样重说、上章末场景被重新描写）→ 派发轻量修复子任务：
+   "仅改写本章开头衔接段，删除与上章末重复的交代与描写，其余正文一字不动"（修复后重生成 delta）
+5. 抽查 source_passages：对 delta 的 new_facts / information_acquisitions 各抽 1 条，
+   按其定位定向读正文对应段落（grep 段首引文），确认事实确在正文中成立
+   （防"正文有而 delta 无"或"delta 记了正文没有的事"）
+6. 编号唯一性（防同号不同物）：对 delta signal_changes 中每个新增编号执行
+   bash scripts/chapter_tools.sh check-id {project_dir} {signal_doc} {ID}
+   - occurrences: 0 → 编号可用（提交时登记）
+   - entry_headings > 1 → 同号多条目 → 责成 Writer 改用新编号（delta 补生成）
+   - 已存在 1 条 → 对照输出行内容判定同物（更新状态）还是不同物（换编号）
+7. 修复任务核验：<fix_report>.applied = yes 且 delta_regenerated = yes，且
+   verify-draft 的 prose_hash 已变化、verify-delta 重跑通过（旧 hash 失效自动拦截）
+8. 模拟读者策略启用时：next_choices 可解析且含 A/B/C 三项；选项公平性核验——
+   三个选项预告字数差距是否超过约 1 倍、某选项是否明显空洞/含糊
+   → 可疑时要求 Writer 仅重新输出 next_choices（并提醒选项公平性原则）
 ```
 
 **Chooser / Reviewer / Solver 返回后**：
@@ -585,13 +665,7 @@ language: {language}
 - "信息增量"字段（记录各角色获知的内幕，可能含终局指针）
 - 任何 Writer 写作后记中引用 {core_doc} 的内容（可能含终局指针）
 
-从 `{signal_doc}` 注入 **Writer 上下文**时的子集提取规则（控制 prompt 膨胀，同时保持一致性所需信息完整）：
-- **全条目注入**：状态为"待投放"、"已投放未揭示/未化解"的活跃投放物（这些是 Writer 防重投、防矛盾、执行结构操作的对象）；即使与本章无直接关联的活跃投放物也保持全条目（防止叙述中意外触碰）
-- **单行索引注入**：状态为"已揭示且已拆穿/已化解"的投放物（编号 + 一句话状态——Writer 只需知道"不能再当悬念用"，无需细节）
-- **不注入**：「已归档」区条目
-- 一致性保障：活跃投放物一条不少；已拆穿/化解投放物保留可查索引。此规则不删减任何"仍可能被正文触碰"的投放物
-
-从 `{signal_doc}` 为 **Writer** 提供「总索引 + 指定条目 + 按需加载」（控制注入体积，同时保证知晓完整）：
+从 `{signal_doc}` 为 **Writer** 提供「总索引 + 指定条目 + 按需加载」（控制注入体积，同时保证知晓完整——这是 Writer 上下文投放物信息的**唯一读取语义**）：
 - **总索引节全量**：每条投放物一行（编号 + 一句话内容 + 状态）——Writer 对全部投放物"知晓存在"，这是防重投、防矛盾、防叙述意外触碰的底线
 - **全条目仅注入**：outline 本章计划标注的编号（应投 / 将触碰 / 结构操作引用的证据编号）
 - **按需加载**：写作中触及索引内其他活跃投放物时，Writer 必须先 read 该条目全文再落笔
@@ -613,63 +687,135 @@ Director 收到 Reviewer 的 `<review_report>` 后：
 - [保留]：意见与核心设定冲突，或修复会提前泄露终局 → 忽略
 - [观察]：🟢 级别或不影响阅读的意见 → 忽略或记录
 
-第二步：修复（仅 [采纳] 且 🔴 的条目）
-- 派发 Writer 修复子任务（用 3.4 修复任务模板，必须附 style_guide + 角色条目上下文）
-- 修复返回后 Director 重读文件做一次轻量核验：
-  - <fix_report>.applied = yes 且文件确实变更 → 完成
-  - applied = partial/no → 再派发一轮（附上轮失败原因）
-- 同一问题最多 2 轮修复；仍失败 → 降级为 🟡 记录，继续推进，不阻断
+第二步：修复（同章全部 [采纳] 且 🔴 的条目合并为一次修复任务）
+- 派发 Writer 修复子任务（用 3.4 修复任务模板，必须附 style_guide + 角色条目上下文，
+  目标版本锁定当前 chXX.md、注入当前 base_revision；多条问题在任务中逐条列出）
+- 修复返回后 Director 做一次轻量核验（6.4 第 7 项）：
+  - <fix_report>.applied = yes 且 delta_regenerated = yes，且重跑 verify-draft
+    （prose_hash 已变化）与 verify-delta（delta 重新绑定新版本、base_revision 仍匹配）
+    均通过 → 完成
+  - applied = partial/no，或复核发现改动区域仍有问题 → 追加一轮修复
+    （仅针对改动区域与依赖事实，附上轮失败原因；每轮修复都必须重生成 delta）
+- 合并修复 + 追加复核各最多 1 轮；仍失败 → 降级为 🟡 记录，继续推进，不阻断；
+  🔴 硬性正确性问题（知识越界/核心事实矛盾）降级时必须在进度看板显式提示，不得静默标为通过
+- ⚠️ 审阅结果只对审阅时的正文版本有效：修复改动正文后，旧审阅结论不得视为对新版本的覆盖
+  （prose_hash 绑定使 verify-delta 自动拦截跨版本的 delta 与审阅混用）
 
-第三步：记录（封存完成后执行，遵守 meta 写权）
-- 🟡（含降级条目）→ 追加到 session_log 本章条目："🟡 待处理：{问题描述}"
-- 被降级的 🔴 → 追加："🔴 未修复（已降级）：{问题描述}"
+第三步：记录（提交步骤中执行，遵守 meta 写权）
+- 🟡（含降级条目）→ 提交时写入 session_log 本章条目："🟡 待处理：{问题描述}"
+- 被降级的 🔴 → 提交时写入："🔴 未修复（已降级）：{问题描述}"
 - 🟢 → 忽略
 ```
 
-### 6.7 检查点与中断恢复（auto_state.json）
+### 6.7 版本化提交协议（Director 亲自执行，不派子任务）
 
-Director 维护 `{project_dir}/meta/auto_state.json` 作为自动写作的唯一进度检查点，**每完成一个原子步骤立即更新**：
+审阅与修复通过后进入提交阶段（phase=committing）。多文件写入不是原子操作——用提交记录与版本号使"部分完成"可识别、可恢复。权威状态版本 `state_revision` 与提交记录存于 `meta/commits.json`，**只经 `scripts/chapter_tools.sh` 读写**。
+
+```
+前置（全部通过才继续；任一失败回到对应阶段）：
+1. bash scripts/chapter_tools.sh verify-draft {project_dir} {NN}   → exit 0 且字数在容差内
+2. bash scripts/chapter_tools.sh verify-delta {project_dir} {NN}   → exit 0
+   （base_revision 与 state_revision 匹配、delta 绑定当前正文版本——失效审阅/旧 delta 在此拦截）
+
+应用 delta（按序写入权威 meta，Director 亲自执行）：
+3. 幂等预检（中断恢复重入时防重复追加）：
+   - grep session_log 是否已有本章「第N章」摘要条目 / characters 是否已有本章出场记录追加
+   - 已存在的写入跳过，只补缺失部分（例如重提交时只追加【修改记录】行，不重写摘要）
+4. session_log.md：按 writing_loop 章节摘要日志格式追加本章条目
+   （含「故事内时间/地点」「信息增量」；字数用 textstat 实测值，不用自报）
+5. characters.md：按 character_state_changes 更新「当前状态」「当前已知信息」快照，
+   并在条目「状态历史」追加一行「第N章：{变化}」（无该小节则创建；历史不裁剪，见 6.9）
+6. {signal_doc}：按 signal_changes 登记条目/更新状态，同步维护「总索引」行（一条不少）；
+   每个新登记编号执行 check-id 复核唯一性
+7. continuity.md：scene_changes → 「场景登记」表；new_facts/revised_facts → 「事实断言」表
+8. outline.md：本章小节回写「实际执行」（outline_deviations 为"无"→ 按计划完成；有 → 偏差及原因）
+
+登记提交：
+9. bash scripts/chapter_tools.sh commit {project_dir} {NN} --meta-files "{本次实际写入的文件清单}"
+   （幂等：同章同 hash 重跑为 no-op；正文修复过 → hash 变化 → 自动按重提交替换条目，版本前进）
+10. 更新 auto_state.json：phase=committed（🔴 正文与权威状态都提交完毕才允许置 committed）
+
+中断恢复规则（phase=committing 时启动恢复）：
+- commits.json 无本章条目 → 从第 3 步幂等预检起重入（已应用的写入被跳过），继续 commit
+- 有条目且 verify-commits hash 匹配 → 提交已完成，仅补 phase=committed，不重写任何文件
+- 有条目但 hash 漂移 → 正文在提交后被改过：回到 6.4/6.6（重审 → 修复+delta 重生成 → 重新提交）
+```
+
+**运行记录（P0 遗留项，每章提交后执行）**：
+
+```
+bash scripts/chapter_tools.sh usage {project_dir} chapter={N} writer={1|0} writer_max={0|1} \
+  reviewer={1|0} fix_rounds={0|1|2} solver={0|1} chooser={0|1} retries={轻量重试数} result={committed|recommitted|degraded}
+```
+追加式 JSONL（meta/usage.log），只记可观测计数，不回显正文；供成本对照（文档 §9.2）与回归分析。
+
+### 6.8 检查点与中断恢复（auto_state.json）
+
+Director 维护 `{project_dir}/meta/auto_state.json` 作为自动写作的唯一进度检查点，**每完成一个原子步骤立即更新 phase**（禁止用字节数/空行猜测进度）：
 
 ```json
 {
   "mode": "auto-write | auto-chapter",
+  "strategy": "default | simulate_reader",
   "total_chapters": 12,
   "current_chapter": 4,
-  "current_segment": 2,
+  "phase": "drafting | reviewing | fixing | committing | committed | finished",
   "chooser_log": [
-    {"chapter": 3, "segment": 1, "choice": "B", "reason": "摘要"},
-    {"chapter": 3, "segment": 2, "choice": "A", "reason": "摘要"}
+    {"chapter": 3, "choice": "B", "reason": "摘要"}
   ],
   "pending_directives": [],
   "updated": "YYYY-MM-DDTHH:mm:ss"
 }
 ```
 
+phase 语义：`drafting` = Writer 整章生成与 delta 产出中；`reviewing` = 正文与 delta 已落盘并通过 6.4 核验、待 Reviewer 审阅；`fixing` = 审阅过滤后修复中（每轮修复重生成 delta）；`committing` = 提交步骤中（6.7：应用 delta + 登记提交）；`committed` = 本章正文与权威状态均已提交（commits.json 有条目）；`finished` = 全书全部章节 committed 且 /finish 收尾（合稿+审阅+最终修复+重合稿）完成——**全书终态，禁止自造枚举值**。
+
 **中断恢复规则**（`/auto-write` 启动时执行）：
 
 ```
-1. 检查 {project_dir}/drafts/ 下是否存在 chXX_draft.md 残留：
-   - 存在且有 1 段 → 从第 XX 章第 2 段续写（不作废、不重写）
-   - 存在且有 2 段 → 从第 XX 章第 3 段续写
-   - ⚠️ 但若同章 chXX.md 已存在（封存后复制的残留）→ 该章实际已完成：删除残留 draft，从第 XX+1 章正常续跑，禁止重写
-   - 读取 auto_state.json 恢复 chooser_log；若文件缺失/损坏，
-     从 session_log 重建（选择轨迹可缺省，仅损失 Chooser 记忆）
-2. 向用户报告恢复点："检测到第 XX 章写到第 X 段，从断点继续。"
-3. 恢复的段落续写时，Writer prompt 中已含 draft 全文，无需特殊处理
+1. 读取 auto_state.json（缺失/损坏 → 从磁盘重建：
+   a. commits.json 有第N章条目且 verify-commits hash 匹配 → 该章 committed（以提交记录为准，
+      优于 session_log 目测——不得因正式章节文件存在就认定封存、审阅、修复均已完成）
+   b. 否则该章 drafting；chooser_log 可缺省，仅损失 Chooser 记忆
+   c. 全程运行 bash scripts/chapter_tools.sh verify-commits —— 发现 hash 漂移的章节须先
+      重新走"修复+delta 重生成+重新提交"，不得带着漂移继续写作）
+2. 组合判定（phase × 文件状态）：
+   - phase=drafting 且 chXX_draft.md 存在 → 派发续写恢复任务（3.4 模板：自读已有正文，
+     从最后一个完整段落后继续，禁止重写全章）
+   - phase=drafting 且 chXX.md 已存在（Writer 已落盘但状态未及更新）→ 不重写正文；
+     运行 verify-delta：通过 → 进入 reviewing；缺失/失效 → 派 delta 补生成任务后进入 reviewing
+   - phase=reviewing → 重新派发 Reviewer（针对当前 chXX.md 版本；其 hash 可从
+     verify-draft 输出记录留痕）
+   - phase=fixing → 重派修复任务（目标版本 = 当前 chXX.md；修复后重生成 delta）
+   - phase=committing → 按 6.7 中断恢复规则（幂等重入或仅补 phase）
+   - phase=committed → 从下一章正常续跑
+   - phase=finished → 全书已完成：不重跑流水线，报告当前状态；如需再审阅走 /review
+3. 向用户报告恢复点："检测到第 XX 章处于{阶段}，从断点继续。"
 ```
 
-### 6.8 章间维护（每章完成后、下一章开始前，由 Director 执行）
+### 6.9 章间维护（每章提交完成后、下一章开始前，由 Director 执行）
+
+三层分离（§5.1）：**原始历史**不因 prompt 预算丢弃；**当前快照**保持短小；**本章工作资料包**（6.1 模板实例化的最小资料集）从两者选取、可重建，不落盘为权威数据。
 
 ```
-1. meta 蒸馏（控制长篇上下文膨胀）：
-   - session_log.md：仅保留最近 2 章完整条目，更早章节压缩为单行（章号+核心事件+投放物状态）
-   - {signal_doc}：已揭示且已拆穿/化解的投放物移入「已归档」区，单行化
-   - characters.md：动态状态字段只保留最新快照；旧状态移入「状态历史」，每角色仅保留最近 3 条
-   - 任一文件超过 150 行或 12KB → 派发 meta 维护子任务深度蒸馏（该子任务可持有完整 meta）
-2. 追加幂等（防重复写入）：向 session_log 追加任何条目或【修改记录】前，先确认同章同内容不存在；
-   修复任务的 meta 同步与封存协议的 meta 更新不得重复追加同一条记录
-3. 上帝指令检查点：处理运行期收到的用户消息（见 writing_loop.md"运行期干预"）
-4. 更新 auto_state.json，进入下一章
+1. 历史归档与快照维护：
+   - session_log.md：压缩前先把被压缩的完整条目整体追加到 meta/history/session_log_archive.md
+     （先归档后压缩，顺序不可倒——原始历史是全稿审阅与角色知识回溯的依据）；随后仅保留
+     最近 2 章完整条目，更早章节压缩为单行。🔴 压缩行格式（字段不得丢弃）：
+     `第X章｜{故事内时间→时间}｜{地点}｜{核心事件一句话}｜{信息增量一句话}｜{投放物状态}`
+   - {signal_doc}：已揭示且已拆穿/化解的投放物移入「已归档」区，单行化（活跃区与总索引保持一条不少）
+   - characters.md：「当前状态」「当前已知信息」为章末快照；「状态历史」按章追加、
+     🔴 不裁剪不删除（废除旧版"每角色仅保留最近 3 条"——完整历史留在条目内，
+     Writer 本就只定向读取本章出场角色条目）
+2. 🔴 蒸馏触发条件重构：文件超过 150 行或 12KB **不再是**派发 LLM 蒸馏的充分条件
+   （历史大 ≠ 工作集大）。仅当工作资料包构建实际受阻（如单个角色条目/单节自身超长，
+   导致 6.1 内联部分超预算）时，才派发**定向**蒸馏子任务——只蒸馏该条目/该节，
+   蒸馏产物回写前先把原文追加到 meta/history/ 对应归档文件
+3. 追加幂等（防重复写入）：向 session_log 追加任何条目或【修改记录】前，先确认同章同内容不存在；
+   提交步骤的 delta 应用与 Solver 判定留痕不得重复追加同一条记录
+4. 运行记录：bash scripts/chapter_tools.sh usage {project_dir} ...（见 6.7 末尾）追加本章运行计数
+5. 上帝指令检查点：处理运行期收到的用户消息（见 writing_loop.md"运行期干预"）
+6. 更新 auto_state.json，进入下一章
 ```
 
 ---
@@ -690,7 +836,7 @@ Director 维护 `{project_dir}/meta/auto_state.json` 作为自动写作的唯一
 |------|------|------|
 | Writer（常规章） | 旗舰模型 · 高档思考 | 创作质量最敏感，不可降级 |
 | Writer（深档变体） | 旗舰模型 · 最高档思考 | 用于证据收敛 / 推导揭示 / 对峙终局章——论断须逐步回指已投放细节，逻辑密度最高 |
-| Chooser | 轻量模型 · 低档思考 | 读者直觉模拟，过度思考反而失真；高频调用，提速省钱 |
+| Chooser | 轻量模型 · 低档思考 | 读者直觉模拟，过度思考反而失真（仅 simulate_reader 策略启用时调用） |
 | Reviewer | 旗舰模型 · 高档思考 | 风格漂移/声音一致性是文学判断 |
 | Solver | 轻量模型 · 高档思考 | 认真读者的批注式分析，中轻量级即可 |
 

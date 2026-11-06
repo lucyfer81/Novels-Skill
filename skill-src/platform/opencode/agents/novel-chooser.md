@@ -1,5 +1,5 @@
 ---
-description: 小说流水线 Chooser 子任务：以读者直觉从三个走向选项中选择。轻量模型+低思考档，贴近真实读者的直觉反应。
+description: 小说流水线 Chooser 子任务（可选策略，仅模拟读者选路启用时调用）：以读者直觉从三个走向选项中选择。轻量模型+低思考档，贴近真实读者的直觉反应。
 mode: subagent
 hidden: true
 model: zhipuai-coding-plan/glm-5.3-flash

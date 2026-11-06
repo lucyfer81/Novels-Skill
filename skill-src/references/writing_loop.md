@@ -164,12 +164,13 @@ C. [选项]
 
 ### 第二步：更新 meta/characters.md
 
-- 本章出场角色：追加「出场记录」；依据本章「信息增量」更新各角色的「当前已知信息」；更新「当前状态」
+- 本章出场角色：追加「出场记录」；依据本章「信息增量」**草拟**各角色本章新增已知信息
+- ⚠️ 知识边界核查（第五步）以**章初**「当前已知信息」+ 本章正文内明确获知的事件为基准——先草拟、核查通过后再并入「当前已知信息」并更新「当前状态」，不得先并入章末值再反查越界
 - 首次/二次出场判定一律以「出场记录」字段为准
 
 ### 第三步：更新 meta/{signal_doc} + 投放预算核对
 
-按题材包 `hooks.md` 的「seal_check」执行：登记本章实际投放的投放物（含正文摘录）并更新状态，完成投放预算核对、结构核对与终章断言，最后回写 outline.md 本章「实际执行」字段。状态变更同步维护「总索引」节（一条不少）。
+按题材包 `hooks.md` 的「seal_check」执行：登记本章实际投放的投放物（含正文摘录）并更新状态，完成投放预算核对、结构核对与终章断言，最后回写 outline.md 本章「实际执行」字段。状态变更同步维护「总索引」节（一条不少）。🔴 新登记编号必须先在 {signal_doc} 全文检索确认未被占用（防同号不同物），占用则改用新编号。
 
 ### 第四步：更新 meta/continuity.md（连贯性登记）
 
@@ -183,10 +184,21 @@ C. [选项]
 - [ ] **人物位置**：每个场景的在场人物来源可追溯，无凭空出现/消失
 - [ ] **物品与身体状态**：上一章末的物品、伤势、衣着、天气等状态延续，无无故重置
 - [ ] **称谓一致**：本章所有称呼符合 characters.md 各角色「称谓」字段
-- [ ] **角色知识边界**：各角色言行未超出其「当前已知信息」（主角未跳步；他人未说出不该知道的事）
+- [ ] **角色知识边界**：各角色言行未超出其**章初**「当前已知信息」加上本章正文中明确获知的信息（以上方第二步草拟、尚未并入的增量为对照基准；主角未跳步；他人未说出不该知道的事）
 - [ ] **终局一致性**：对照 `{core_doc}`——终局相关角色的公开言行符合其中约定的行为线/时间线（如伪装策略、情感时间线）；叙述未泄露"只有文档持有方知道的信息"
 - [ ] **outline 对照**：本章完成计划节点，所有偏差已回写 outline.md
 - [ ] **连贯性登记对照**：本章场景与 continuity.md「场景登记」比对——同地点再次进场必须是"有意复访"（推进新内容），不得无意复写既有氛围与细节意象；本章事实不与「事实断言」表冲突，且新增断言已登记入表
+
+### 第六步：登记版本化提交（P2；交互模式与自动模式共用提交账本）
+
+五步完成后运行（幂等：同章同正文重跑为 no-op；正文修改过则按重提交替换条目）：
+
+```
+bash scripts/chapter_tools.sh init {project_dir}        # 幂等，确保 pending/history/commits.json 存在
+bash scripts/chapter_tools.sh commit {project_dir} {N} --meta-files session_log.md,characters.md,{signal_doc},continuity.md,outline.md --no-delta
+```
+
+交互模式直接写权威 meta（无 delta），故用 `--no-delta`；登记后合稿（/finish）可对全部章节做 hash 一致性校验。
 
 ---
 
@@ -401,7 +413,7 @@ C. [选项]
 💡 建议：[下一章的具体调整（投放/梳理/顺序）]
 ```
 
-> 自动模式在关键章间自动执行同构测试，命中触发条件（下一章含推翻操作或属收敛/揭示/终局阶段）时为强制项（角色与判定规则见 auto_agents.md 4.4；触发点见本文 /auto-write 执行流程步骤 19.5），无需手动调用。
+> 自动模式在关键章间自动执行同构测试，命中触发条件（下一章含推翻操作或属收敛/揭示/终局阶段）时为强制项（角色与判定规则见 auto_agents.md 4.4；触发点见本文 /auto-write 执行流程步骤 12（提交后运行）），无需手动调用。
 
 ---
 
@@ -472,13 +484,18 @@ C. [选项]
 2. 读取 {project_dir}/meta/project_info.md 确认项目名
 3. 【🟡 汇总】扫描 {project_dir}/meta/session_log.md 中所有 🟡/降级🔴 条目，
    输出《待处理建议清单》（自动流水线不自动修复🟡；用户可稍后说"批量处理🟡"逐条触发修复）
-4. 列出 {project_dir}/drafts/ 下所有章节文件，按 ch01, ch02, ... 排序
-5. 生成合并文件：
-   - 开头：书名标题 + 章节目录
-   - 依次读取每个章节文件，之间用 --- 分隔
-6. 保存到 {project_dir}/{项目名}.md
-7. 输出完成信息
+4. 脚本合稿（唯一入口，勿手工拼接）：
+   bash scripts/chapter_tools.sh merge {project_dir} {project_dir}/{书名}.md
+   —— 按章节号排序合并全部章节，逐章校验 commits.json 登记的正文 hash
+   （漂移即失败：先按修复流程重新提交该章再合稿；未登记章节警告列入）
+5. 依据脚本输出确认：章节数、总字数、hash 校验结果
+6. 输出完成信息
+7. 自动触发两轮全稿审阅（见下方协议）
 ```
+
+⚠️ **合稿步骤（4-5）可独立重跑**：审阅后修复了章节内容的场景，必须重新执行合稿步骤（不重复审阅）——每章修复后先重生成 delta 并重新提交（chapter_tools.sh commit 会替换该章条目），再重跑 merge；merge 的 hash 校验保证合稿使用的是全部最新已提交版本。
+
+⚠️ **全稿审阅唯一调度入口**：两轮全稿审阅只经 `/finish`（自动触发）或 `/review`（手动）进入；自动写作循环不得在 /finish 之外另行发起全稿审阅（防重复执行）。
 
 ### 合并文件格式
 
@@ -621,95 +638,116 @@ B. 暂时搁置 → 先合上报告，稍后再回来处理
 ## `/auto-write [项目名|new]` — 自动写作模式
 
 > 详细角色定义、Prompt 模板和通信协议见 `references/auto_agents.md`。
-> 四角色协作：Director（编排核验）/ Writer（写正文）/ Chooser（读者视角选走向）/ Reviewer（无真相视角审阅）；另有 Solver（挑战读者测试，按需触发，见 auto_agents.md 4.4）。
+> 角色协作：Director（编排与脚本化核验）/ Writer（整章正文生成）/ Reviewer（无真相视角审阅）/ Solver（按需触发，见 auto_agents.md 4.4）；Chooser 为可选模拟读者策略（默认关闭，见 auto_agents.md 第四节）。
+> 默认策略下每章 = 一次 Writer 主任务 + 一次 Reviewer 主任务，不生成三选项。
 
 ### 前置检查与项目锁定（必须通过才能开始）
 
 ```
 1. 目标判定：
    - 若参数为 new（如 /auto-write new）：
-     a. 调用 references/init_flow.md 引导用户完成前置选择与各轮共创对话
-     b. 按 references/genres/{genre}/init.md 的文件生成清单生成 novels/{项目名}/ 及其下 meta/ 和 drafts/ 文件
-     c. 锁定 {project_dir} = novels/{项目名}
-     d. 初始化完毕后【自动无缝启动】全书自动写作流水线（从第1章开始）
+      a. 调用 references/init_flow.md 引导用户完成前置选择与各轮共创对话
+      b. 按 references/genres/{genre}/init.md 的文件生成清单生成 novels/{项目名}/ 及其下 meta/ 和 drafts/ 文件
+      c. 锁定 {project_dir} = novels/{项目名}
+      d. 初始化完毕后【自动无缝启动】全书自动写作流水线（从第1章开始）
+   - 若指令含 --simulate-reader（如 /auto-write --simulate-reader {项目名}）：
+      锁定 {project_dir} 并设置 strategy = simulate_reader（模拟读者选路，见 auto_agents.md 第四节）
    - 若参数指定了项目名/路径（如 /auto-write 倒影的碎片）：
-     锁定 {project_dir} = novels/{项目名}
+      锁定 {project_dir} = novels/{项目名}
    - 若未指定且当前无上下文：
-     列出 novels/ 下的一级小说目录供用户选择（或输入 new）；严禁擅自挑选！
+      列出 novels/ 下的一级小说目录供用户选择（或输入 new）；严禁擅自挑选！
 2. 读取 {project_dir}/meta/project_info.md 获取 genre、language；按「槽位解析」加载题材包 manifest（+ personas.md / hooks.md，供构建子任务 prompt）
 3. 确认 {project_dir}/meta/ 目录下所有必要文件存在（project_info, style_guide, {core_doc}, characters, {signal_doc}, outline, session_log, continuity——旧项目缺 continuity.md 时创建空表，格式见本文「连贯性登记格式」）
+3.5 【状态工具初始化（P2）】bash scripts/chapter_tools.sh status {project_dir}
+   - commits.json 缺失（旧项目）→ bash scripts/chapter_tools.sh migrate {project_dir} --signal-doc {signal_doc}
+     **一次性迁移**：补录提交检查点 + 检查总索引/必要字段（缺总索引 → 本轮一次性补建，
+     此后每章不再退回全文读取）；已迁移项目重复运行 migrate 为 no-op
+   - 新项目 → bash scripts/chapter_tools.sh init {project_dir}（创建 pending/ history/ usage.log/commits.json）
+   - 随后运行 verify-commits：存在 hash 漂移的章节先重新提交（见 /finish 修复流程）再开写
 4. 读取 {project_dir}/meta/outline.md 确定总章节数
 5. 读取 {project_dir}/meta/session_log.md 并检查 {project_dir}/drafts/ 确定当前进度（已完成的章节数）
-6. 【中断恢复】检查断点（见 auto_agents.md 6.7）：
-   - 若存在 chXX_draft.md 残留（1-2段）→ 从第 XX 章第 (段数+1) 段续写，不作废不重写
-   - 读取 meta/auto_state.json 恢复 chooser_log；缺失则从 session_log 重建（选择轨迹可缺省）
-   - 向用户报告恢复点
-7. 初始化/更新 meta/auto_state.json（mode、total_chapters、恢复的 chooser_log）
+6. 【中断恢复】按 auto_agents.md 6.8 执行：读取 auto_state.json 的 phase 与 drafts/ 文件状态
+   组合判定恢复点（drafting 续写 / reviewing 重审 / fixing 重修 / committing 幂等重入提交 / committed 下一章），
+   读取/重建 chooser_log，向用户报告恢复点
+7. 初始化/更新 meta/auto_state.json（mode、strategy、total_chapters、phase、恢复的 chooser_log）
 8. 向用户确认并汇报初始状态："《{书名}》将从第 X 章自动写到第 Y 章（共 Z 章），启动自动化写作循环..."
 ```
 
 ### 执行流程
 
-Director（主 Agent 自身）按以下循环执行（输出核验规则见 auto_agents.md 6.4）：
+Director（主 Agent 自身）按以下章循环执行（输出核验规则见 auto_agents.md 6.4；phase 随每个原子步骤更新）：
 
 ```
 对于每一章 (chapter = 恢复点或当前进度+1 到 总章数):
 
   ── 章间检查点（第2章起）──
   0. 处理上帝指令与停止条件（见下方"运行期干预"）
-  0.5 章间维护：meta 蒸馏（见 auto_agents.md 6.8）
+  0.5 章间维护：历史归档与快照维护（见 auto_agents.md 6.9）
 
-  ── 段落 1 ──
-  1. 按 auto_agents.md 6.1 模板构建 Writer prompt
-     （注入：身份[题材包 personas] + 风格 + {core_doc} + 角色 + 投放物状态 + outline + 上章尾 + 上帝指令 + 题材钩子[hooks]）
+  ── 整章生成（Writer，每章一次主任务；phase=drafting）──
+  1. 按 auto_agents.md 6.1 模板构建 Writer 整章 prompt
+      （注入：身份[题材包 personas] + 前情摘要 + {core_doc} 读取指引 + 角色名单 + 投放物编号
+      + base_revision[commits.json 的 state_revision 实读] + 上帝指令 + 上章读者选择[仅模拟策略]
+      + 题材钩子[hooks——write_preflight/signal_budget 全文；seal_check 随任务指令注入，用于 delta 生成]）
   2. 派发 Writer 子任务（平台已部署角色档位时按 auto_agents.md 第七节规则选择常规/深档变体）
-  3. 【核验】draft 文件增长 + 字数达标（zh 850-950字 / en 550-650词）+ <choices> 可解析 + 选项公平
-     失败 → 按 auto_agents.md 6.4 轻量补救（补写/重发缺失标签/代写文件），不盲信报告
-  4. 构建 Chooser prompt（前情 + 本章摘要 + 选择轨迹，⚠️ 绝不含 {core_doc}，见 auto_agents.md 6.2）
-  5. 派发 Chooser 子任务
-  6. 【核验】<choice> ∈ {A,B,C}；记录到 auto_state.json 的 chooser_log
+     ——Writer 产出 drafts/ch{NN}.md + meta/pending/ch{NN}.delta.md，不改权威 meta
+  3. 【核验】auto_agents.md 6.4：chapter_tools.sh verify-draft（存在性/字数/编号泄漏）
+      + verify-delta（字段/base_revision/prose_hash 绑定）+ chapter_report 可解析
+      + 章首衔接查重（对上章末）+ source_passages 抽查 + check-id 编号预检
+      失败 → 轻量补救（续写恢复 / 补写 / delta 补生成 / 轻量修复——均绑定目标版本），不盲信报告
+      通过 → 更新 phase=reviewing
 
-  ── 段落 2 ──
-  7-10. 同段落 1，Writer prompt 追加 Chooser 的第1段走向选择 + 当前草稿全文
+  ── 责任编辑审阅（独立 Reviewer，无真相视角；phase=reviewing）──
+  4. 按 auto_agents.md 6.3 构建 Reviewer prompt（脱敏上下文：正文路径自读 + 风格 + 脱敏角色条目 + 已投放物）
+  5. 派发 Reviewer 子任务
+  6. 【核验】<review_report> 可解析；失败重试1次，仍失败则本章跳过审阅并标记 ⚠️
 
-  ── 段落 3（收拢 + 封存，Writer 只写不审）──
-  11. 构建 Writer prompt（第3段模板：收拢本章 + 执行封存协议，不含编辑审阅）
-  12. 派发 Writer 子任务（深档调度规则同段落 1）
-  13. 【核验】drafts/chXX.md 已重命名（否则 Director 代做 mv；并确认 chXX_draft.md 残留已清除）；
-      <seal_report> 中 failed 的 meta 更新由 Director 补写
+  ── 审阅过滤与有界修复（phase=fixing）──
+  7. Director 对照 {core_doc} 过滤报告：[采纳] / [保留] / [观察]
+  8. [采纳]且🔴 的条目合并为一次修复任务派发（附风格+角色上下文，目标版本锁定当前 chXX.md，
+      注入 base_revision；修复后 Writer 重生成 delta 覆盖 pending 文件）
+      → 核验 applied=yes 且 delta_regenerated=yes 且重跑 verify-draft（hash 已变）+ verify-delta（重新绑定）；
+      复核未通过追加一轮（仅针对改动区域与依赖事实，每轮修复都重生成 delta）；
+      仍失败 → 降级为 🟡 记录，继续推进，不阻断（硬性正确性问题降级时在进度看板显式提示）
+  9. 🟡（含降级条目）与 🟢 处理：留待提交步骤写入 session_log（见 auto_agents.md 6.6 第三步）
 
-  ── 责任编辑审阅（独立 Reviewer，无真相视角）──
-  14. 按 auto_agents.md 6.3 构建 Reviewer prompt（脱敏上下文：正文 + 风格 + 脱敏角色条目 + 已投放物）
-  15. 派发 Reviewer 子任务
-  16. 【核验】<review_report> 可解析；失败重试1次，仍失败则本章跳过审阅并标记 ⚠️
+  ── 版本化提交（Director 亲自执行，不派子任务；phase=committing → committed）──
+  10. 按 auto_agents.md 6.7 提交协议执行：verify-draft + verify-delta 终验 → 幂等预检 →
+      按序应用 delta（session_log → characters → {signal_doc} → continuity → outline「实际执行」，
+      含 🟡/降级🔴 记录、textstat 实测字数）→ check-id 复核 → chapter_tools.sh commit 登记（幂等）
+      → phase=committed
+      （中断恢复：重入时已应用的写入被幂等预检跳过；commits.json 有条目且 hash 匹配则仅补 phase）
 
-  ── 审阅过滤与自动修复（有界循环）──
-  17. Director 对照 {core_doc} 过滤报告：[采纳] / [保留] / [观察]
-  18. [采纳]且🔴 → 派发 Writer 修复子任务（附风格+角色上下文）→ 核验 applied=yes
-      同一问题最多 2 轮；仍失败 → 降级为 🟡，继续推进，不阻断
-  19. 🟡（含降级条目）→ 封存完成后追加记录到 {project_dir}/meta/session_log.md
-      🟢 → 忽略
+  ── 挑战读者测试（Solver，🔴 命中触发条件即强制执行；提交后运行——其语料依赖已提交状态）──
+  12. 判定触发条件：读取 outline.md 第 N+1 章计划，若其结构操作含「推翻」（假设/主线转折），
+      或第 N+1 章属于证据收敛/推导揭示/终局阶段
+      → 按 auto_agents.md 4.4 构建 Solver prompt（摘要版上下文）并派发子任务（不得跳过；跳过须在 session_log 记录原因）
+      → 【核验】<solver_report> 可解析；失败重试1次，仍失败跳过并在本章进度卡片标记 ⚠️（不阻断）
+      → 按 4.4 判定规则对照 {core_doc} 得出结论（结构生效/提前泄漏/支撑不足），
+        以【挑战读者测试】条目追加 session_log；需调整后续投放顺序时
+        更新 outline「章节计划变更记录」并写明原因
+      → 🔴 判定留痕：每章判定后无论是否派发，以单行追加 session_log
+        （"第X章后 Solver：已派发" 或 "第X章后 Solver：未命中（原因）"）——禁止无痕跳过
 
-  ── 挑战读者测试（Solver，🔴 命中触发条件即强制执行，非可选诊断）──
-  19.5 判定触发条件：读取 outline.md 第 N+1 章计划，若其结构操作含「推翻」（假设/主线转折），
-       或第 N+1 章属于证据收敛/推导揭示/终局阶段
-       → 按 auto_agents.md 4.4 构建 Solver prompt（摘要版上下文）并派发子任务（不得跳过；跳过须在 session_log 记录原因）
-       → 【核验】<solver_report> 可解析；失败重试1次，仍失败跳过并在本章进度卡片标记 ⚠️（不阻断）
-       → 按 4.4 判定规则对照 {core_doc} 得出结论（结构生效/提前泄漏/支撑不足），
-         封存完成后以【挑战读者测试】条目追加 session_log；需调整后续投放顺序时
-         更新 outline「章节计划变更记录」并写明原因
+  ── 模拟读者策略（可选，仅 strategy=simulate_reader 时；默认跳过本步）──
+  13. 派发 Chooser 子任务（auto_agents.md 6.2 模板：对 Writer 给出的下一章开场走向做选择），
+      选择写入 auto_state.json 的 chooser_log（章级粒度）
 
-  ── 进度汇报 ──
-  20. 向用户输出本章完成状态与进度看板
-  21. 检查停止条件（用户要求停 / 达到指定章数）→ 满足则输出结算看板并停止
-  22. 更新 auto_state.json，继续下一章
+  ── 汇报与推进 ──
+  14. 运行 chapter_tools.sh usage 追加本章运行记录（writer/reviewer/fix_rounds/solver/chooser/retries/result）
+  15. 向用户输出本章完成状态与单行进度看板
+  16. 检查停止条件（用户要求停 / 达到指定章数）→ 满足则输出结算看板并停止
+  17. 更新 auto_state.json，继续下一章
 
 全部章节完成后：
-  23. 汇总 session_log 中全部 🟡/降级🔴 条目，输出《待处理建议清单》（自动模式不自动修复🟡）
-  24. 执行 /finish（按序合并所有 {project_dir}/drafts/chXX.md 为完整小说文件）
-  25. 自动触发两轮全稿审阅（分块协议见上方"两轮全稿审阅协议"）
-  26. 全稿审阅中 [采纳]+🔴 的问题自动派发 Writer 修复（同样有界：最多2轮，失败降级🟡）
-  27. 向用户输出最终完成报告（含《待处理建议清单》与批量处理提示）
+  18. 汇总 session_log 中全部 🟡/降级🔴 条目，输出《待处理建议清单》（自动模式不自动修复🟡）
+  19. 执行 /finish（脚本合稿 + 自动触发两轮全稿审阅——全稿审阅的唯一调度入口，自动循环不得另行发起）
+  20. 全稿审阅中 [采纳]+🔴 的问题合并批量修复（有界：同 6.6，合并修复+复核追加各最多 1 轮，失败降级🟡；
+      每章修复后重生成 delta 并重新提交——commit 替换该章条目，版本前进）
+  21. 重新执行 /finish 的合稿步骤（merge 重跑，不重复审阅；hash 校验确认使用全部最新已提交章节）
+  22. 运行 chapter_tools.sh verify-commits 终验（全部章节 hash 与提交记录一致）
+  23. 向用户输出最终完成报告（含《待处理建议清单》与批量处理提示）；
+      更新 auto_state.json（phase=finished——全书终态）
 ```
 
 ### 运行期干预（上帝指令与暂停）
@@ -726,7 +764,9 @@ Director（主 Agent 自身）按以下循环执行（输出核验规则见 auto
    → 当前章节流水线完整走完后停止，输出结算看板与恢复方式
 3. 范围类指令（"写到第8章停"）：
    → 更新停止条件，写入 auto_state.json
-4. 所有已处理的指令在 directives.md 中标记状态（done / blocked / pending）
+4. 策略类指令（"开启/关闭模拟读者选路"）：
+   → 更新 auto_state.json 的 strategy 字段（default ↔ simulate_reader），下一章生效
+5. 所有已处理的指令在 directives.md 中标记状态（done / blocked / pending）
 ```
 
 `/auto-pause [项目名]` 为显式暂停指令：若自动流水线正在运行，等效于上述停止类指令；若已停止，仅输出当前状态与恢复方式（`/auto-write` 从断点续写）。
@@ -736,34 +776,34 @@ Director（主 Agent 自身）按以下循环执行（输出核验规则见 auto
 每章完成后，Director 向用户输出**单行**进度（⚠️ 不逐章重列已完成章节——每章重新罗列全部历史章节会随进度线性膨胀上下文）：
 
 ```
-📖 《{书名}》 {已完成章数}/{总章数} ({百分比}%) | 最新：✅ 第{X}章 ({字数}字) — Chooser: [{路径}] — 审阅: {🔴×n 🟡×n 🟢×n / ⚠️} | ⏳ 下一章：第{X+1}章
+📖 《{书名}》 {已完成章数}/{总章数} ({百分比}%) | 最新：✅ 第{X}章 ({textstat 字数}字){ — Chooser: [{选择}](仅模拟策略)} — 审阅: {🔴×n 🟡×n 🟢×n / ⚠️} | ⏳ 下一章：第{X+1}章
 （如有 blocked 的上帝指令，在下方单独列出提示）
 ```
 
 ### 异常处理
 
-异常场景的完整处理机制以 `references/auto_agents.md` 为准（第二节"解析失败处理"与 6.4"输出核验协议"为唯一权威定义）：轻量重试优先于整任务重跑、Chooser 失败默认选 A、Reviewer 失败跳过本章审阅标记 ⚠️、修复循环最多 2 轮后降级 🟡 不阻断主流程。
+异常场景的完整处理机制以 `references/auto_agents.md` 为准（第二节"解析失败处理"、6.4"输出核验协议"与 6.7"版本化提交协议"为唯一权威定义）：轻量重试优先于整任务重跑、Chooser 失败默认选 A、Reviewer 失败跳过本章审阅标记 ⚠️、修复为"同章合并一次 + 复核追加一轮"（每轮修复重生成 delta），仍失败降级 🟡 不阻断主流程；提交阶段中断按 6.7 幂等重入（commits.json 有条目且 hash 匹配 → 仅补 phase，不重写任何文件）。
 
 补充一条本文件专属规则：
-- **上下文过长** → 章间蒸馏（见 auto_agents.md 6.8）：session_log 压缩、投放物归档、characters 状态快照化
+- **上下文过长** → 章间维护（见 auto_agents.md 6.9）：session_log 先归档后压缩、投放物归档、characters 状态历史与快照分离（🔴 不以行数触发蒸馏，仅工作资料包受阻时定向蒸馏）
 
 ---
 
 ## `/auto-chapter [项目名|new]` — 单章自动写作
 
-与 `/auto-write` 采用相同的 Director / Writer / Chooser / Reviewer 四角色协作机制（含输出核验、有界修复循环、auto_state.json 检查点），但执行范围仅限定为**当前正在进行的这一个章节**。
+与 `/auto-write` 采用相同的 Director / Writer / Reviewer 协作机制（含 chapter_delta 产出与脚本化核验、合并有界修复循环、版本化提交（auto_agents.md 6.7）、auto_state.json phase 检查点；Chooser 为可选策略，Solver 按需触发），但执行范围仅限定为**当前正在进行的这一个章节**。
 
 ### 执行流程
 
-1. 执行 `/auto-write` 相同的前置检查与项目锁定（含中断恢复；若为 `new` 则先初始化并自动写完第1章）
-2. 仅执行当前单章的写作流水线（第1段 → Chooser → 第2段 → Chooser → 第3段收拢 + 章节封存 → Reviewer 审阅 → 过滤 → 🔴有界自动修复）
-3. 章节完成后更新 auto_state.json，输出本章结算看板与决策提示：
+1. 执行 `/auto-write` 相同的前置检查与项目锁定（含状态工具初始化/一次性迁移、中断恢复；若为 `new` 则先初始化并自动写完第1章）
+2. 仅执行当前单章的整章流水线（整章生成+delta → 脚本核验 → Reviewer 审阅 → 过滤 → 🔴 合并有界自动修复（delta 重生成）→ 版本化提交 → Solver/Chooser（命中/启用时））
+3. 章节完成后更新 auto_state.json（phase=committed），输出本章结算看板与决策提示：
 
 ```
-✅ 第 {N} 章 自动写作完成 ({字数}字)
+✅ 第 {N} 章 自动写作完成 ({textstat 字数}字)
 
-Chooser 选择路径：{段1选择} → {段2选择} → 收拢
 审阅结果：{🔴×0 🟡×1 🟢×2}（🔴 已自动修复 {n} 处；降级 {m} 处）
+{Chooser 下一章走向：{选择}（仅模拟策略启用时显示）}
 
 下一步可选：
 - 输入 /auto-chapter 继续自动写下一章
@@ -788,7 +828,7 @@ Chooser 选择路径：{段1选择} → {段2选择} → 收拢
 3. 若已停止：输出当前断点状态与恢复方式
 4. 停止时输出结算看板：
    - 已完成章节列表与审阅统计
-   - 断点位置（第 X 章第 X 段 / 章间）
+   - 断点位置（第 X 章 · phase：drafting/reviewing/fixing/committing/committed/finished / 章间）
    - 未消费的上帝指令（若有）
    - 恢复方式："输入 /auto-write {项目名} 从断点续写"
 ```

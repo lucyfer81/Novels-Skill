@@ -13,10 +13,10 @@
 
 - 每章最多投放 1 个明确的情感信号（ES，Emotional Signal）
 - 可附带 1 个"反向信号"（DS，退缩信号，误导读者认为感情倒退）
-- 信号投放以 outline.md 本章「应投信号」计划为准（ES-/DS- 编号）；若实际偏离计划，必须显式说明原因（交互模式写入写作后记，自动模式写入 `<segment_meta>`），**禁止无声遗漏**
+- 信号投放以 outline.md 本章「应投信号」计划为准（ES-/DS- 编号）；若实际偏离计划，必须显式说明原因（交互模式写入写作后记，自动模式写入 `<chapter_report>` 的 author_notes 与 delta 的 outline_deviations），**禁止无声遗漏**
 - 情感信号必须嵌入场景/动作/对话，不得以叙述者口吻直接点明
 - ES 与 DS 交替投放才有重量——靠近之后需要退缩
-- 每次投放后立即更新 `meta/romance_clues.md`（本题材 signal_doc）的状态
+- 每次投放后立即登记状态变化：交互模式直接更新 `meta/romance_clues.md`（本题材 signal_doc）；自动模式记入 `<chapter_delta>` 的 signal_changes，由提交步骤统一应用
 - 🔴 **编号不入正文**：ES-/DS-/AS- 等登记编号，以及"全书 / 弧线操作 / 信号投放"等结构术语，只允许出现在 meta 文档与写作后记中；正文与对白一律不得出现——读者读到的是小说，不是信号登记册
 
 ## showing_checklist（Showing 自查，仅报命中项）
