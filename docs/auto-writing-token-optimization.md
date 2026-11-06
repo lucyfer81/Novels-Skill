@@ -1,7 +1,7 @@
 # 全自动小说写作：上下文与 Token 优化设计
 
 日期：2026-09-06  
-状态：工程实施建议，尚未修改 Skill 或运行成本对照实验  
+状态：P0–P2 已实施（commit 732aad2，2026-11-06：整章 Writer、delta 增量提交、chapter_tools.sh/textstat.sh 确定性脚本）；P3 与运行成本对照实验未实施  
 范围：`skill-src/` 的全自动写作流程；交互式写作保持原有交互语义
 
 ## 1. 目标与结论
@@ -291,7 +291,7 @@ Director 保留运行策略、检查点、当前章短报告和未解决问题�
 
 ## 10. 仓库实施约束
 
-- 本文仅为设计文档，没有实施源代码修改。
+- 实施状态：P0–P2 已落地（2026-11-06，commit 732aad2：整章 Writer、delta 增量提交、确定性脚本）；P3（宿主会话恢复、Solver 去重、修复总预算、全稿定向审阅）尚未实施。
 - 修改 `skill-src/` 后必须运行 `bash skill-src/scripts/lint_coupling.sh`，通过后才可执行同步。
 - 题材内容只能进入题材包；共享协议与脚本通过 manifest 和抽象槽位协作。
 - 修改题材接口时对照 `references/genres/_SPEC.md` 与 `docs/genre-plugin-architecture.md`。
